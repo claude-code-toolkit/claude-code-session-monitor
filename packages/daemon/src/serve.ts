@@ -25,6 +25,7 @@ for (const envPath of envPaths) {
 import { SessionWatcher, type SessionEvent, type SessionState } from "./watcher.js";
 import { StreamServer } from "./server.js";
 import { formatStatus } from "./status.js";
+import { checkGHAuth, isGHEnabled } from "./github.js";
 
 const PORT = parseInt(process.env.PORT ?? "4450", 10);
 const MAX_AGE_HOURS = parseInt(process.env.MAX_AGE_HOURS ?? "24", 10);
@@ -54,6 +55,22 @@ async function main(): Promise<void> {
   console.log(`${colors.bold}Claude Code Session Daemon${colors.reset}`);
   console.log(`${colors.dim}Showing sessions from last ${MAX_AGE_HOURS} hours${colors.reset}`);
   console.log();
+
+  // Check optional integrations and show warnings
+  const hasAnthropicKey = !!process.env.ANTHROPIC_API_KEY;
+  await checkGHAuth();
+  const hasGHAuth = isGHEnabled();
+
+  if (!hasAnthropicKey || !hasGHAuth) {
+    console.log(`${colors.yellow}Optional integrations:${colors.reset}`);
+    if (!hasAnthropicKey) {
+      console.log(`  ${colors.dim}• ANTHROPIC_API_KEY not set - AI summaries disabled${colors.reset}`);
+    }
+    if (!hasGHAuth) {
+      console.log(`  ${colors.dim}• gh CLI not authenticated - PR/CI tracking disabled${colors.reset}`);
+    }
+    console.log();
+  }
 
   // Start the durable streams server
   const streamServer = new StreamServer({ port: PORT });

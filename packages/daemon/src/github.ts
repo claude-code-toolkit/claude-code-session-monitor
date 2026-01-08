@@ -14,6 +14,32 @@ const defaultExecAsync = promisify(exec);
 type ExecFn = (cmd: string, opts: { cwd: string }) => Promise<{ stdout: string; stderr: string }>;
 let execAsync: ExecFn = defaultExecAsync;
 
+// Track if gh CLI is available and authenticated
+let ghEnabled: boolean | null = null;
+
+/**
+ * Check if gh CLI is available and authenticated
+ */
+export async function checkGHAuth(): Promise<boolean> {
+  if (ghEnabled !== null) return ghEnabled;
+
+  try {
+    await defaultExecAsync("gh auth status", { cwd: process.cwd() });
+    ghEnabled = true;
+    return true;
+  } catch {
+    ghEnabled = false;
+    return false;
+  }
+}
+
+/**
+ * Check if gh is enabled (cached result)
+ */
+export function isGHEnabled(): boolean {
+  return ghEnabled === true;
+}
+
 // Types for queue tasks
 interface PRCheckTask {
   type: "check_pr";
@@ -289,6 +315,7 @@ function stopCIPolling(sessionId: string): void {
  */
 export function queuePRCheck(cwd: string, branch: string, sessionId: string): void {
   if (!branch) return;
+  if (!isGHEnabled()) return; // Silently skip if gh not authenticated
   console.log(`[PR] Queueing PR check for branch: ${branch}`);
   queue.push({ type: "check_pr", cwd, branch, sessionId });
 }

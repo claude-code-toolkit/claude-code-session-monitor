@@ -9,6 +9,11 @@ import type { queueAsPromised } from "fastq";
 import type { SessionState } from "./watcher.js";
 import type { LogEntry } from "./types.js";
 
+// Check if API is enabled (key is set)
+function isAPIEnabled(): boolean {
+  return !!process.env.ANTHROPIC_API_KEY;
+}
+
 // Lazy-load client to ensure env vars are loaded first
 let client: Anthropic | null = null;
 function getClient(): Anthropic {
@@ -128,6 +133,11 @@ export async function generateAISummary(session: SessionState): Promise<string> 
     return cached.summary;
   }
 
+  // Skip API call if no key configured
+  if (!isAPIEnabled()) {
+    return getFallbackSummary(session);
+  }
+
   // Generate AI summary for idle/waiting sessions
   try {
     const context = extractContext(session);
@@ -238,6 +248,11 @@ export async function generateGoal(session: SessionState): Promise<string> {
 
   // For new sessions, use the original prompt
   if (entries.length < 5) {
+    return cleanGoalText(originalPrompt);
+  }
+
+  // Skip API call if no key configured
+  if (!isAPIEnabled()) {
     return cleanGoalText(originalPrompt);
   }
 
