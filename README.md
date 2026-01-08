@@ -87,10 +87,39 @@ The daemon uses an XState state machine to determine session status:
 
 ### Timeout Fallbacks
 
-For older Claude Code versions or sessions without hooks:
-- **5 seconds**: If tool_use pending → `waiting_for_approval`
-- **60 seconds**: If no turn-end marker → `waiting_for_input`
+Claude Code inconsistently writes `turn_duration` markers, so we use timeout fallbacks:
+- **500ms**: Text response without turn marker → `waiting_for_input` (fast detection)
+- **5 seconds**: Tool use pending too long → `waiting_for_approval`
 - **5 minutes**: No activity → `idle`
+
+The daemon rechecks sessions every 2 seconds to catch stale states even without file changes.
+
+## Desktop Notifications (macOS)
+
+Get notified when Claude needs attention:
+
+1. **Enable notifications** in `.env`:
+   ```bash
+   NOTIFICATIONS_ENABLED=true
+   ```
+
+2. **Silence Claude Code's built-in notifications** (optional, to avoid duplicates):
+   Add to `~/.claude/settings.json`:
+   ```json
+   {
+     "preferredNotifChannel": "terminal_bell"
+   }
+   ```
+
+3. **Install terminal-notifier** (for better notifications):
+   ```bash
+   brew install terminal-notifier
+   ```
+
+### Features
+- Shows current iTerm tab name (e.g., "✳ Feature Implementation (node)")
+- Click notification to focus the correct iTerm tab
+- Notifications for "Waiting for input" and "Needs approval" states
 
 ## Development
 
@@ -108,11 +137,29 @@ pnpm dev    # Start UI dev server
 
 ## Environment Variables
 
-The daemon needs an Anthropic API key for AI summaries:
+All integrations are optional - the daemon works without any of these:
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
+# .env file in project root
+
+# AI-powered summaries (optional)
+ANTHROPIC_API_KEY=sk-ant-...
+
+# Desktop notifications (optional, macOS only)
+NOTIFICATIONS_ENABLED=true
+
+# Daemon settings
+PORT=4450              # Stream server port
+MAX_AGE_HOURS=24       # Only show sessions from last N hours
 ```
+
+### Optional Integrations
+
+| Feature | Requirement | Fallback |
+|---------|-------------|----------|
+| AI Summaries | `ANTHROPIC_API_KEY` | Shows truncated original prompt |
+| PR/CI Tracking | `gh` CLI authenticated | Skipped silently |
+| Notifications | `NOTIFICATIONS_ENABLED=true` | None |
 
 ## Dependencies
 

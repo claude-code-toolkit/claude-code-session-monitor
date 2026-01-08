@@ -26,6 +26,7 @@ import { SessionWatcher, type SessionEvent, type SessionState } from "./watcher.
 import { StreamServer } from "./server.js";
 import { formatStatus } from "./status.js";
 import { checkGHAuth, isGHEnabled } from "./github.js";
+import { isNotificationsEnabled, notifyWaitingForInput, notifyNeedsApproval } from "./notify.js";
 
 const PORT = parseInt(process.env.PORT ?? "4450", 10);
 const MAX_AGE_HOURS = parseInt(process.env.MAX_AGE_HOURS ?? "24", 10);
@@ -61,13 +62,18 @@ async function main(): Promise<void> {
   await checkGHAuth();
   const hasGHAuth = isGHEnabled();
 
-  if (!hasAnthropicKey || !hasGHAuth) {
+  const hasNotifications = isNotificationsEnabled();
+
+  if (!hasAnthropicKey || !hasGHAuth || !hasNotifications) {
     console.log(`${colors.yellow}Optional integrations:${colors.reset}`);
     if (!hasAnthropicKey) {
       console.log(`  ${colors.dim}• ANTHROPIC_API_KEY not set - AI summaries disabled${colors.reset}`);
     }
     if (!hasGHAuth) {
       console.log(`  ${colors.dim}• gh CLI not authenticated - PR/CI tracking disabled${colors.reset}`);
+    }
+    if (!hasNotifications) {
+      console.log(`  ${colors.dim}• NOTIFICATIONS_ENABLED not set - desktop notifications disabled${colors.reset}`);
     }
     console.log();
   }
@@ -109,6 +115,26 @@ async function main(): Promise<void> {
       await streamServer.publishSession(session, operation);
     } catch (error) {
       console.error(`${colors.yellow}[ERROR]${colors.reset} Failed to publish:`, error);
+    }
+
+    // Send notifications on status transitions
+    if (type === "updated" && event.previousStatus) {
+      const prevStatus = event.previousStatus.status;
+      const newStatus = session.status.status;
+      const wasWorking = prevStatus === "working";
+
+      // Notify when transitioning FROM working TO waiting/needs approval
+      if (wasWorking && newStatus === "waiting") {
+        const notifyInfo = {
+          cwd: session.cwd,
+          gitRepoId: session.gitRepoId,
+        };
+        if (session.status.hasPendingToolUse) {
+          await notifyNeedsApproval(notifyInfo);
+        } else {
+          await notifyWaitingForInput(notifyInfo);
+        }
+      }
     }
   });
 
