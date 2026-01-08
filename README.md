@@ -104,7 +104,10 @@ Get notified when Claude needs attention:
    ```
 
 2. **Silence Claude Code's built-in notifications** (optional, to avoid duplicates):
-   Add to `~/.claude/settings.json`:
+   ```bash
+   ./scripts/silence-claude-notifications.sh
+   ```
+   Or manually add to `~/.claude/settings.json`:
    ```json
    {
      "preferredNotifChannel": "terminal_bell"
