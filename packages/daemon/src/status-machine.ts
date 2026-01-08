@@ -213,7 +213,13 @@ export function deriveStatusFromMachine(entries: LogEntry[]): {
 
   const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
   const APPROVAL_TIMEOUT_MS = 5 * 1000; // 5 seconds
-  const STALE_TIMEOUT_MS = 60 * 1000; // 60 seconds
+  const STALE_TIMEOUT_MS = 500; // 500ms - for text responses without turn markers
+
+  // Check if last message entry is an assistant with text (not just thinking)
+  // Skip non-message entries like file-history-snapshot
+  const lastMessageEntry = [...entries].reverse().find(e => e.type === "assistant" || e.type === "user");
+  const hasAssistantText = lastMessageEntry?.type === "assistant" &&
+    (lastMessageEntry as AssistantEntry).message.content.some(b => b.type === "text");
 
   // Apply timeout transitions
   if (timeSinceActivity > IDLE_TIMEOUT_MS) {
@@ -221,8 +227,8 @@ export function deriveStatusFromMachine(entries: LogEntry[]): {
   } else if (stateValue === "working" && context.hasPendingToolUse && timeSinceActivity > APPROVAL_TIMEOUT_MS) {
     // Tool use pending for too long - should be in waiting_for_approval
     actor.send({ type: "APPROVAL_TIMEOUT" });
-  } else if (stateValue === "working" && !context.hasPendingToolUse && timeSinceActivity > STALE_TIMEOUT_MS) {
-    // Stale without tool use - probably turn ended without marker
+  } else if (stateValue === "working" && !context.hasPendingToolUse && hasAssistantText && timeSinceActivity > STALE_TIMEOUT_MS) {
+    // Assistant finished with text, no pending tools, stale - turn ended without marker
     actor.send({ type: "STALE_TIMEOUT" });
   }
 

@@ -90,6 +90,29 @@ export class SessionWatcher extends EventEmitter {
     return this.sessions;
   }
 
+  /**
+   * Re-check all sessions in "working" state for timeout transitions.
+   * Call this periodically to handle sessions that went stale without file changes.
+   */
+  recheckTimeouts(): void {
+    for (const [, session] of this.sessions) {
+      // Only recheck sessions in "working" state
+      if (session.status.status !== "working") continue;
+
+      const previousStatus = session.status;
+      const newStatus = deriveStatus(session.entries);
+
+      if (statusChanged(previousStatus, newStatus)) {
+        session.status = newStatus;
+        this.emit("session", {
+          type: "updated",
+          session,
+          previousStatus,
+        } satisfies SessionEvent);
+      }
+    }
+  }
+
   private debouncedHandleFile(filepath: string): void {
     // Clear existing timer for this file
     const existing = this.debounceTimers.get(filepath);

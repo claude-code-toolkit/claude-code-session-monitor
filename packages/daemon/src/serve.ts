@@ -99,10 +99,16 @@ async function main(): Promise<void> {
     console.error(`${colors.yellow}[ERROR]${colors.reset}`, error.message);
   });
 
+  // Periodically recheck timeouts for sessions stuck in "working" state
+  const timeoutChecker = setInterval(() => {
+    watcher.recheckTimeouts();
+  }, 2000);
+
   // Handle shutdown
   process.on("SIGINT", async () => {
     console.log();
     console.log(`${colors.dim}Shutting down...${colors.reset}`);
+    clearInterval(timeoutChecker);
     watcher.stop();
     await streamServer.stop();
     process.exit(0);
