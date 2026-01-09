@@ -13,13 +13,12 @@
 	-moz-osx-font-smoothing: grayscale;
 }
 
-/* Use native overlay scrollbars */
+/* Thin overlay scrollbars - only appear when content overflows */
 * {
 	scrollbar-width: thin;
 	scrollbar-color: theme('colors.slate.6') transparent;
 }
 
-/* For WebKit browsers - thin overlay scrollbars */
 ::-webkit-scrollbar {
 	width: 6px;
 	height: 6px;
@@ -38,17 +37,10 @@
 	background: theme('colors.slate.7');
 }
 
-/* Hide scrollbar until hover on scrollable containers */
-.overflow-y-auto {
-	scrollbar-gutter: stable;
-}
-
-.overflow-y-auto::-webkit-scrollbar-thumb {
-	background: transparent;
-}
-
-.overflow-y-auto:hover::-webkit-scrollbar-thumb {
-	background: theme('colors.slate.6');
+/* Overlay scrollbar - doesn't take up space */
+.overflow-y-auto,
+.overflow-x-auto {
+	overflow: overlay;
 }
 
 /* Staggered card entrance animations */
