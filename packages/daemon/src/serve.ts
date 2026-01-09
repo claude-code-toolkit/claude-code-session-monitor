@@ -27,7 +27,8 @@ import { SessionWatcher, type SessionEvent, type SessionState } from "./watcher.
 import { StreamServer } from "./server.js";
 import { formatStatus } from "./status.js";
 import { checkGHAuth, isGHEnabled } from "./github.js";
-import { isNotificationsEnabled, notifyWaitingForInput, notifyNeedsApproval, focusiTermSession, openSessionInITerm, focusOrOpenSession } from "./notify.js";
+import { isNotificationsEnabled, notifyWaitingForInput, notifyNeedsApproval } from "./notify.js";
+import { ITerm } from "./iterm.js";
 
 const PORT = parseInt(process.env.PORT ?? "4450", 10);
 const API_PORT = parseInt(process.env.API_PORT ?? "4451", 10);
@@ -102,15 +103,12 @@ async function main(): Promise<void> {
 
     if (req.method === "POST" && req.url === "/focus-iterm") {
       try {
-        // Parse body
         let body = "";
         for await (const chunk of req) {
           body += chunk;
         }
         const { searchTerm } = JSON.parse(body || "{}");
-
-        const success = await focusiTermSession(searchTerm);
-
+        const success = await ITerm.focusByName(searchTerm);
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ success }));
       } catch (error) {
@@ -122,21 +120,17 @@ async function main(): Promise<void> {
 
     if (req.method === "POST" && req.url === "/open-session") {
       try {
-        // Parse body
         let body = "";
         for await (const chunk of req) {
           body += chunk;
         }
         const { cwd, sessionId } = JSON.parse(body || "{}");
-
         if (!cwd || !sessionId) {
           res.writeHead(400, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: "cwd and sessionId required" }));
           return;
         }
-
-        const success = await openSessionInITerm({ cwd, sessionId });
-
+        const success = await ITerm.openTab({ cwd, command: `claude --resume ${sessionId}` });
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ success }));
       } catch (error) {
@@ -148,21 +142,17 @@ async function main(): Promise<void> {
 
     if (req.method === "POST" && req.url === "/focus-or-open") {
       try {
-        // Parse body
         let body = "";
         for await (const chunk of req) {
           body += chunk;
         }
-        const { cwd, sessionId, status, lastAgentMessage } = JSON.parse(body || "{}");
-
+        const { cwd, sessionId, lastAgentMessage } = JSON.parse(body || "{}");
         if (!cwd || !sessionId) {
           res.writeHead(400, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: "cwd and sessionId required" }));
           return;
         }
-
-        const result = await focusOrOpenSession({ cwd, sessionId, status, lastAgentMessage });
-
+        const result = await ITerm.focusOrOpen({ cwd, sessionId, lastAgentMessage });
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(result));
       } catch (error) {
