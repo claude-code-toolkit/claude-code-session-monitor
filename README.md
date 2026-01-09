@@ -130,10 +130,10 @@ Click any session card in the UI to focus or open the corresponding terminal tab
 
 ### Supported Terminals
 
-- `iterm2` - iTerm2 (default on macOS)
+- `iterm2` - iTerm2
 - `none` - Disable terminal features
 
-Set via `TERMINAL` env var.
+Set via `TERMINAL` env var. Defaults to `iterm2` on macOS, `none` otherwise.
 
 ### How Tab Matching Works
 
