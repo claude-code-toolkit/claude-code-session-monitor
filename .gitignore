@@ -1,6 +1,6 @@
 .env
 node_modules
 dist/
+build/
 .DS_Store
 .svelte-kit/
-packages/ui-svelte/

@@ -1,0 +1,86 @@
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+@import '@fontsource-variable/space-grotesk';
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
+
+:root {
+	font-synthesis: none;
+	text-rendering: optimizeLegibility;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+/* Use native overlay scrollbars */
+* {
+	scrollbar-width: thin;
+	scrollbar-color: theme('colors.slate.6') transparent;
+}
+
+/* For WebKit browsers - thin overlay scrollbars */
+::-webkit-scrollbar {
+	width: 6px;
+	height: 6px;
+}
+
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+	background: theme('colors.slate.6');
+	border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background: theme('colors.slate.7');
+}
+
+/* Hide scrollbar until hover on scrollable containers */
+.overflow-y-auto {
+	scrollbar-gutter: stable;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb {
+	background: transparent;
+}
+
+.overflow-y-auto:hover::-webkit-scrollbar-thumb {
+	background: theme('colors.slate.6');
+}
+
+/* Staggered card entrance animations */
+.session-card:nth-child(1) {
+	animation-delay: 0ms;
+}
+.session-card:nth-child(2) {
+	animation-delay: 50ms;
+}
+.session-card:nth-child(3) {
+	animation-delay: 100ms;
+}
+.session-card:nth-child(4) {
+	animation-delay: 150ms;
+}
+.session-card:nth-child(5) {
+	animation-delay: 200ms;
+}
+.session-card:nth-child(6) {
+	animation-delay: 250ms;
+}
+.session-card:nth-child(7) {
+	animation-delay: 300ms;
+}
+.session-card:nth-child(8) {
+	animation-delay: 350ms;
+}
+
+/* Paused wiggle animation until hover */
+.status-needs-approval {
+	animation-play-state: paused;
+}
+.status-needs-approval:hover {
+	animation-play-state: running;
+}
