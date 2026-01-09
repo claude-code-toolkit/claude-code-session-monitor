@@ -106,6 +106,29 @@ function getCIStatusColor(status: CIStatus): "green" | "red" | "yellow" | "gray"
   }
 }
 
+const API_BASE = "http://127.0.0.1:4451";
+
+async function focusOrOpenSession(cwd: string, sessionId: string, status: string): Promise<"focused" | "opened" | "failed"> {
+  try {
+    const res = await fetch(`${API_BASE}/focus-or-open`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cwd, sessionId, status }),
+    });
+    const data = await res.json();
+    return data.action;
+  } catch {
+    return "failed";
+  }
+}
+
+async function handleSessionClick(session: Session): Promise<void> {
+  // Smart focus or open:
+  // - Idle sessions always open new tab
+  // - Active sessions try to focus existing tab
+  await focusOrOpenSession(session.cwd, session.sessionId, session.status);
+}
+
 export function SessionCard({ session }: SessionCardProps) {
   const showPendingTool = session.hasPendingToolUse && session.pendingTool;
   // Show path from ~ (e.g., ~/programs/project)
@@ -114,7 +137,7 @@ export function SessionCard({ session }: SessionCardProps) {
   return (
     <HoverCard.Root openDelay={300}>
       <HoverCard.Trigger>
-        <Card size="2" className={getCardClass(session)} style={{ cursor: "pointer" }}>
+        <Card size="2" className={getCardClass(session)} style={{ cursor: "pointer" }} onClick={() => handleSessionClick(session)}>
           <Flex direction="column" gap="2">
             {/* Header: directory and time */}
             <Flex justify="between" align="center">

@@ -8,6 +8,7 @@ import dotenv from "dotenv";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 
 // Load .env from project root (handles both src and dist execution)
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -26,9 +27,10 @@ import { SessionWatcher, type SessionEvent, type SessionState } from "./watcher.
 import { StreamServer } from "./server.js";
 import { formatStatus } from "./status.js";
 import { checkGHAuth, isGHEnabled } from "./github.js";
-import { isNotificationsEnabled, notifyWaitingForInput, notifyNeedsApproval } from "./notify.js";
+import { isNotificationsEnabled, notifyWaitingForInput, notifyNeedsApproval, focusiTermSession, openSessionInITerm, focusOrOpenSession } from "./notify.js";
 
 const PORT = parseInt(process.env.PORT ?? "4450", 10);
+const API_PORT = parseInt(process.env.API_PORT ?? "4451", 10);
 const MAX_AGE_HOURS = parseInt(process.env.MAX_AGE_HOURS ?? "24", 10);
 const MAX_AGE_MS = MAX_AGE_HOURS * 60 * 60 * 1000;
 
@@ -83,6 +85,101 @@ async function main(): Promise<void> {
   await streamServer.start();
 
   console.log(`Stream URL: ${colors.cyan}${streamServer.getStreamUrl()}${colors.reset}`);
+  console.log();
+
+  // Start simple HTTP API server for actions (like focus iTerm)
+  const apiServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
+    // CORS headers for UI
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+    if (req.method === "OPTIONS") {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/focus-iterm") {
+      try {
+        // Parse body
+        let body = "";
+        for await (const chunk of req) {
+          body += chunk;
+        }
+        const { searchTerm } = JSON.parse(body || "{}");
+
+        const success = await focusiTermSession(searchTerm);
+
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ success }));
+      } catch (error) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: (error as Error).message }));
+      }
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/open-session") {
+      try {
+        // Parse body
+        let body = "";
+        for await (const chunk of req) {
+          body += chunk;
+        }
+        const { cwd, sessionId } = JSON.parse(body || "{}");
+
+        if (!cwd || !sessionId) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "cwd and sessionId required" }));
+          return;
+        }
+
+        const success = await openSessionInITerm({ cwd, sessionId });
+
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ success }));
+      } catch (error) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: (error as Error).message }));
+      }
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/focus-or-open") {
+      try {
+        // Parse body
+        let body = "";
+        for await (const chunk of req) {
+          body += chunk;
+        }
+        const { cwd, sessionId, status } = JSON.parse(body || "{}");
+
+        if (!cwd || !sessionId) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "cwd and sessionId required" }));
+          return;
+        }
+
+        const result = await focusOrOpenSession({ cwd, sessionId, status });
+
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(result));
+      } catch (error) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: (error as Error).message }));
+      }
+      return;
+    }
+
+    res.writeHead(404);
+    res.end("Not found");
+  });
+
+  apiServer.listen(API_PORT, "127.0.0.1", () => {
+    console.log(`API server: ${colors.cyan}http://127.0.0.1:${API_PORT}${colors.reset}`);
+  });
+
   console.log();
 
   // Start the session watcher
@@ -153,6 +250,7 @@ async function main(): Promise<void> {
     console.log(`${colors.dim}Shutting down...${colors.reset}`);
     clearInterval(timeoutChecker);
     watcher.stop();
+    apiServer.close();
     await streamServer.stop();
     process.exit(0);
   });
