@@ -15,9 +15,9 @@ A real-time dashboard for monitoring Claude Code sessions across multiple projec
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
 │  Claude Code    │     │     Daemon      │     │       UI        │
-│   Sessions      │────▶│   (Watcher)     │────▶│   (React)       │
+│   Sessions      │────▶│   (Watcher)     │────▶│   (SvelteKit)   │
 │  ~/.claude/     │     │                 │     │                 │
-│   projects/     │     │  Durable Stream │     │  TanStack DB    │
+│   projects/     │     │  Durable Stream │     │  Durable Stream │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
 ```
 
@@ -30,9 +30,9 @@ Watches `~/.claude/projects/` for session log changes and:
 - Detects git branches and polls for PR/CI status
 - Publishes state updates to Durable Streams
 
-### UI (`packages/ui`)
+### UI (`packages/ui-svelte`)
 
-React app using TanStack Router and Radix UI:
+SvelteKit app with Tailwind CSS:
 - Subscribes to Durable Streams for real-time updates
 - Groups sessions by GitHub repository
 - Shows session cards with goal, summary, branch/PR info
@@ -206,7 +206,6 @@ MAX_AGE_HOURS=24       # Only show sessions from last N hours
 ## Dependencies
 
 - **@durable-streams/*** - Real-time state synchronization
-- **@tanstack/db** - Reactive database for UI
 - **xstate** - State machine for status detection
 - **chokidar** - File system watching
 - **SvelteKit** - UI framework
