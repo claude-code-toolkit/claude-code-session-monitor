@@ -8,7 +8,7 @@ import {
   machineStatusToResult,
 } from "./status-machine.js";
 
-const DEFAULT_IDLE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+const DEFAULT_IDLE_THRESHOLD_MS = 20 * 60 * 1000; // 20 minutes
 
 /**
  * Derive session status from log entries using XState state machine.

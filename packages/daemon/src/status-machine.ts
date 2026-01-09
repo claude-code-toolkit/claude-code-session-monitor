@@ -34,7 +34,7 @@ export type StatusState = "idle" | "working" | "waiting_for_approval" | "waiting
  * State machine for session status.
  *
  * States:
- * - idle: No activity for 5+ minutes
+ * - idle: No activity for 20+ minutes
  * - working: Claude is actively processing
  * - waiting_for_approval: Tool use needs user approval
  * - waiting_for_input: Claude finished, waiting for user
@@ -211,7 +211,7 @@ export function deriveStatusFromMachine(entries: LogEntry[]): {
   const lastActivityTime = context.lastActivityAt ? new Date(context.lastActivityAt).getTime() : 0;
   const timeSinceActivity = now - lastActivityTime;
 
-  const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+  const IDLE_TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes
   const APPROVAL_TIMEOUT_MS = 5 * 1000; // 5 seconds
   const STALE_TIMEOUT_MS = 500; // 500ms - for text responses without turn markers
 

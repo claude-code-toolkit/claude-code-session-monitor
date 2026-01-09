@@ -225,7 +225,7 @@ function printHelp(): void {
   console.log("  ${colors.green}Working${colors.reset}    Claude is generating a response");
   console.log("  ${colors.yellow}Waiting${colors.reset}    Waiting for your input");
   console.log("  ${colors.yellow}Approval${colors.reset}   Waiting for tool approval");
-  console.log("  ${colors.gray}Idle${colors.reset}       No activity for 5+ minutes");
+  console.log("  ${colors.gray}Idle${colors.reset}       No activity for 20+ minutes");
 }
 
 async function main(): Promise<void> {

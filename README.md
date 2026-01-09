@@ -70,7 +70,7 @@ The daemon uses an XState state machine to determine session status:
 
 | State | Description | UI Column |
 |-------|-------------|-----------|
-| `idle` | No activity for 5+ minutes | Idle |
+| `idle` | No activity for 20+ minutes | Idle |
 | `working` | Claude is actively processing | Working |
 | `waiting_for_approval` | Tool use needs user approval | Needs Approval |
 | `waiting_for_input` | Claude finished, waiting for user | Waiting |
@@ -90,7 +90,7 @@ The daemon uses an XState state machine to determine session status:
 Claude Code inconsistently writes `turn_duration` markers, so we use timeout fallbacks:
 - **500ms**: Text response without turn marker → `waiting_for_input` (fast detection)
 - **5 seconds**: Tool use pending too long → `waiting_for_approval`
-- **5 minutes**: No activity → `idle`
+- **20 minutes**: No activity → `idle`
 
 The daemon rechecks sessions every 2 seconds to catch stale states even without file changes.
 
