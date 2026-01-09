@@ -5,50 +5,58 @@
 	export let repoId: string;
 	export let repoUrl: string | null;
 	export let sessions: Session[];
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	export let activityScore: number;
 
 	$: working = sessions.filter((s) => s.status === 'working');
 	$: needsApproval = sessions.filter((s) => s.status === 'waiting' && s.hasPendingToolUse);
 	$: waiting = sessions.filter((s) => s.status === 'waiting' && !s.hasPendingToolUse);
 	$: idle = sessions.filter((s) => s.status === 'idle');
-	$: isHot = activityScore > 50;
+
+	// Extract repo name from ID for cleaner display
+	$: displayName = repoId === 'Other' ? 'other' : repoId.split('/').pop() || repoId;
+	$: orgName = repoId === 'Other' ? null : repoId.includes('/') ? repoId.split('/')[0] : null;
 </script>
 
-<section class="mb-8">
-	<!-- Header -->
-	<div class="flex items-center gap-3 mb-4">
-		<h2 class="font-heading text-xl font-bold">
-			{#if repoId === 'Other'}
-				<span class="text-slate-11">Other</span>
-			{:else if repoUrl}
+<section class="group">
+	<!-- Repository header -->
+	<div class="flex items-baseline gap-2 mb-4">
+		{#if repoId === 'Other'}
+			<h2 class="text-sm font-mono text-carbon-9">~/other</h2>
+		{:else}
+			<span class="text-sm font-mono text-carbon-8">
+				{#if orgName}{orgName}/{/if}
+			</span>
+			{#if repoUrl}
 				<a
 					href={repoUrl}
 					target="_blank"
 					rel="noopener noreferrer"
-					class="text-violet-11 hover:text-violet-12 hover:underline"
+					class="text-sm font-medium text-carbon-12 hover:text-accent-9 transition-colors"
 				>
-					{repoId}
+					{displayName}
 				</a>
 			{:else}
-				{repoId}
+				<h2 class="text-sm font-medium text-carbon-12">{displayName}</h2>
 			{/if}
-		</h2>
-		{#if isHot}
-			<span class="text-sm" title="High activity">🔥</span>
 		{/if}
-		<span class="text-sm text-slate-11">
-			{sessions.length} session{sessions.length !== 1 ? 's' : ''}
-		</span>
+
+		<!-- Inline activity stats -->
+		<div class="flex items-center gap-3 ml-2 text-2xs font-mono">
+			{#if working.length > 0}
+				<span class="text-active-10">{working.length} active</span>
+			{/if}
+			{#if needsApproval.length > 0}
+				<span class="text-pending-10">{needsApproval.length} pending</span>
+			{/if}
+		</div>
 	</div>
 
-	<!-- Kanban columns -->
-	<div class="flex gap-3 overflow-x-auto pb-2">
-		<KanbanColumn title="Working" sessions={working} color="green" />
-		<KanbanColumn title="Needs Approval" sessions={needsApproval} color="orange" />
-		<KanbanColumn title="Waiting" sessions={waiting} color="yellow" />
-		<KanbanColumn title="Idle" sessions={idle} color="gray" />
+	<!-- Kanban columns - horizontal scroll for overflow -->
+	<div class="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
+		<KanbanColumn title="Working" sessions={working} status="working" />
+		<KanbanColumn title="Needs Input" sessions={needsApproval} status="pending" />
+		<KanbanColumn title="Waiting" sessions={waiting} status="waiting" />
+		<KanbanColumn title="Idle" sessions={idle} status="idle" />
 	</div>
-
-	<!-- Separator -->
-	<hr class="mt-6 border-slate-6" />
 </section>

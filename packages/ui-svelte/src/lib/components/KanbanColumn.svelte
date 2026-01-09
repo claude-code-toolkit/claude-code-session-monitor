@@ -4,50 +4,74 @@
 
 	export let title: string;
 	export let sessions: Session[];
-	export let color: 'green' | 'orange' | 'yellow' | 'gray';
+	export let status: 'working' | 'pending' | 'waiting' | 'idle';
 
-	const bgColors: Record<string, string> = {
-		green: 'bg-grass-3/50 border-grass-6',
-		orange: 'bg-orange-3/50 border-orange-6',
-		yellow: 'bg-amber-3/50 border-amber-6',
-		gray: 'bg-slate-3/50 border-slate-6'
+	// Terminal-style status indicators
+	const statusConfig = {
+		working: {
+			icon: '▸',
+			iconClass: 'text-active-9 animate-glow-pulse',
+			label: 'text-active-11',
+			count: 'text-active-10',
+			bg: 'bg-active-3/20',
+			border: 'border-active-6/20',
+		},
+		pending: {
+			icon: '◆',
+			iconClass: 'text-pending-9',
+			label: 'text-pending-11',
+			count: 'text-pending-10',
+			bg: 'bg-pending-3/20',
+			border: 'border-pending-6/20',
+		},
+		waiting: {
+			icon: '○',
+			iconClass: 'text-carbon-9',
+			label: 'text-carbon-11',
+			count: 'text-carbon-10',
+			bg: 'bg-carbon-3/30',
+			border: 'border-carbon-6/20',
+		},
+		idle: {
+			icon: '·',
+			iconClass: 'text-carbon-8',
+			label: 'text-carbon-10',
+			count: 'text-carbon-9',
+			bg: 'bg-carbon-2/50',
+			border: 'border-carbon-6/15',
+		},
 	};
 
-	const headerBorderColors: Record<string, string> = {
-		green: 'border-l-grass-9',
-		orange: 'border-l-orange-9',
-		yellow: 'border-l-amber-9',
-		gray: 'border-l-slate-9'
-	};
-
-	const countColors: Record<string, string> = {
-		green: 'text-grass-11',
-		orange: 'text-orange-11',
-		yellow: 'text-amber-11',
-		gray: 'text-slate-11'
-	};
+	$: config = statusConfig[status];
+	$: isEmpty = sessions.length === 0;
 </script>
 
-<div class="flex-1 min-w-[280px] max-w-[400px] {bgColors[color]} border rounded-xl p-3">
-	<div class="flex flex-col gap-3 h-full">
-		<!-- Header -->
-		<div class="flex justify-between items-center">
-			<h3 class="font-heading text-base font-bold border-l-4 pl-2 {headerBorderColors[color]}">
-				{title}
-			</h3>
-			<span class="text-sm font-bold {countColors[color]}">{sessions.length}</span>
+<div
+	class="flex-1 min-w-[300px] max-w-[380px] flex flex-col rounded-lg border {config.border} {config.bg}"
+>
+	<!-- Column header -->
+	<div class="flex items-center justify-between px-3 py-2.5">
+		<div class="flex items-center gap-2">
+			<span class="font-mono text-sm {config.iconClass}">{config.icon}</span>
+			<span class="text-xs font-medium uppercase tracking-wider {config.label}">{title}</span>
 		</div>
+		{#if sessions.length > 0}
+			<span class="text-xs font-mono {config.count} tabular-nums">{sessions.length}</span>
+		{/if}
+	</div>
 
-		<!-- Cards list with scroll -->
-		<div class="flex-1 overflow-y-auto max-h-[500px]">
-			<div class="flex flex-col gap-2 pr-1">
-				{#each sessions as session (session.sessionId)}
-					<SessionCard {session} />
-				{/each}
-				{#if sessions.length === 0}
-					<p class="text-sm text-slate-11 text-center py-8 opacity-60">No sessions</p>
-				{/if}
+	<!-- Cards container -->
+	<div class="flex-1 px-2 pb-2 overflow-y-auto kanban-scroll max-h-[calc(100vh-200px)] min-h-[100px]">
+		{#if isEmpty}
+			<div class="flex items-center justify-center h-full min-h-[60px]">
+				<span class="text-xs text-carbon-7 font-mono">—</span>
 			</div>
-		</div>
+		{:else}
+			<div class="flex flex-col gap-2">
+				{#each sessions as session (session.sessionId)}
+					<SessionCard {session} {status} />
+				{/each}
+			</div>
+		{/if}
 	</div>
 </div>

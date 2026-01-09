@@ -2,8 +2,11 @@
 @import 'tailwindcss/components';
 @import 'tailwindcss/utilities';
 
-@import '@fontsource-variable/space-grotesk';
-@import '@fontsource-variable/inter';
+/* Geist Fonts */
+@import '@fontsource/geist-sans/latin.css';
+@import '@fontsource/geist-mono/latin.css';
+
+/* Fallback fonts */
 @import '@fontsource-variable/jetbrains-mono';
 
 :root {
@@ -11,12 +14,19 @@
 	text-rendering: optimizeLegibility;
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
+	font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv09';
 }
 
-/* Thin overlay scrollbars - only appear when content overflows */
+/* Selection styling */
+::selection {
+	background: theme('colors.accent.6');
+	color: theme('colors.accent.12');
+}
+
+/* Refined scrollbars - minimal and unobtrusive */
 * {
 	scrollbar-width: thin;
-	scrollbar-color: theme('colors.slate.6') transparent;
+	scrollbar-color: theme('colors.carbon.7') transparent;
 }
 
 ::-webkit-scrollbar {
@@ -29,50 +39,97 @@
 }
 
 ::-webkit-scrollbar-thumb {
-	background: theme('colors.slate.6');
+	background: theme('colors.carbon.6');
 	border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-	background: theme('colors.slate.7');
+	background: theme('colors.carbon.7');
 }
 
-/* Overlay scrollbar - doesn't take up space */
+/* Overlay scrollbar - doesn't consume layout space */
 .overflow-y-auto,
 .overflow-x-auto {
 	overflow: overlay;
 }
 
-/* Staggered card entrance animations */
-.session-card:nth-child(1) {
-	animation-delay: 0ms;
-}
-.session-card:nth-child(2) {
-	animation-delay: 50ms;
-}
-.session-card:nth-child(3) {
-	animation-delay: 100ms;
-}
-.session-card:nth-child(4) {
-	animation-delay: 150ms;
-}
-.session-card:nth-child(5) {
-	animation-delay: 200ms;
-}
-.session-card:nth-child(6) {
-	animation-delay: 250ms;
-}
-.session-card:nth-child(7) {
-	animation-delay: 300ms;
-}
-.session-card:nth-child(8) {
-	animation-delay: 350ms;
+/* Staggered card entrance animations - subtle and quick */
+.session-card {
+	--stagger-delay: 0ms;
+	animation-delay: var(--stagger-delay);
 }
 
-/* Paused wiggle animation until hover */
-.status-needs-approval {
-	animation-play-state: paused;
+.session-card:nth-child(1) { --stagger-delay: 0ms; }
+.session-card:nth-child(2) { --stagger-delay: 25ms; }
+.session-card:nth-child(3) { --stagger-delay: 50ms; }
+.session-card:nth-child(4) { --stagger-delay: 75ms; }
+.session-card:nth-child(5) { --stagger-delay: 100ms; }
+.session-card:nth-child(6) { --stagger-delay: 125ms; }
+.session-card:nth-child(7) { --stagger-delay: 150ms; }
+.session-card:nth-child(8) { --stagger-delay: 175ms; }
+
+/* Focus visible styles */
+:focus-visible {
+	outline: 2px solid theme('colors.accent.9');
+	outline-offset: 2px;
 }
-.status-needs-approval:hover {
-	animation-play-state: running;
+
+/* Card focus states */
+.session-card:focus-visible {
+	outline: 1px solid theme('colors.accent.9');
+	outline-offset: 0;
+}
+
+/* Status indicator dot animation */
+.status-dot {
+	animation: status-pulse 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes status-pulse {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0.5; }
+}
+
+/* Smooth transitions for all interactive elements */
+.interactive {
+	transition: all 0.15s ease-out;
+}
+
+/* Prevent layout shift on hover transforms */
+.card-stable {
+	will-change: transform, box-shadow;
+	transform: translateZ(0);
+}
+
+/* Kanban column scrollable area */
+.kanban-scroll {
+	scrollbar-gutter: stable;
+}
+
+/* Typography utilities */
+.text-balance {
+	text-wrap: balance;
+}
+
+.truncate-2 {
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+/* Monospace number alignment */
+.tabular-nums {
+	font-variant-numeric: tabular-nums;
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
 }

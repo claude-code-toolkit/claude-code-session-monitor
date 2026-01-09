@@ -7,79 +7,124 @@ export default {
 	theme: {
 		extend: {
 			colors: {
-				violet: {
-					1: '#14121f',
-					2: '#1b1525',
-					3: '#291f43',
-					4: '#33265a',
-					5: '#3d2e6e',
-					6: '#473781',
-					7: '#5842a3',
-					8: '#6e56cf',
-					9: '#8b5cf6',
-					10: '#9d6dff',
-					11: '#baa7ff',
-					12: '#e2ddfe'
+				// Refined neutral scale - warm-tinted darks
+				carbon: {
+					1: '#0a0a0b',
+					2: '#0f0f10',
+					3: '#141415',
+					4: '#1a1a1c',
+					5: '#202023',
+					6: '#28282c',
+					7: '#323238',
+					8: '#424249',
+					9: '#5a5a63',
+					10: '#78787f',
+					11: '#a8a8b0',
+					12: '#eeeef0',
 				},
-				slate: {
-					1: '#111113',
-					2: '#18191b',
-					3: '#212225',
-					4: '#272a2d',
-					5: '#2e3135',
-					6: '#363a3f',
-					7: '#43484e',
-					8: '#5a6169',
-					9: '#696e77',
-					10: '#777b84',
-					11: '#b0b4ba',
-					12: '#edeef0'
+				// Accent: Warm coral-orange - distinctive, not the usual cyan/purple
+				accent: {
+					3: '#2a1a16',
+					4: '#3d2420',
+					5: '#4f2e29',
+					6: '#643a33',
+					7: '#7d483f',
+					8: '#9a584c',
+					9: '#e07a5f',  // Primary - warm coral
+					10: '#e8927a',
+					11: '#f0aa96',
+					12: '#fae5df',
 				},
-				grass: {
-					3: '#0d2214',
-					6: '#1b3926',
-					9: '#22c55e',
-					11: '#5cff8a'
+				// Status: Working - electric cyan (stands out against warm palette)
+				active: {
+					3: '#0a1f24',
+					4: '#0f2d33',
+					5: '#143b44',
+					6: '#1a4a55',
+					7: '#1f5a68',
+					8: '#256b7a',
+					9: '#22d3ee',  // Bright cyan
+					10: '#5ce1f0',
+					11: '#99ecf5',
+					12: '#d4f8fc',
 				},
-				orange: {
-					3: '#2c1608',
-					6: '#4e2a09',
-					9: '#f97316',
-					11: '#ff9a3d'
-				},
-				amber: {
-					3: '#271e00',
-					6: '#473a00',
+				// Status: Needs approval - warm amber
+				pending: {
+					3: '#241a0a',
+					4: '#35260f',
+					5: '#463214',
+					6: '#573f19',
+					7: '#6a4c1f',
+					8: '#7d5a26',
 					9: '#eab308',
-					11: '#ffc53d'
-				}
+					10: '#f0c53d',
+					11: '#f5d76e',
+					12: '#fcf3d4',
+				},
+				// Status: Waiting - muted slate
+				waiting: {
+					3: '#161619',
+					4: '#1d1d22',
+					5: '#25252b',
+					6: '#2e2e36',
+					7: '#383842',
+					8: '#45454f',
+					9: '#6b6b78',
+					10: '#8a8a96',
+					11: '#acacb6',
+					12: '#d4d4da',
+				},
+				// Error - muted red
+				error: {
+					3: '#261214',
+					5: '#3d1c1f',
+					6: '#4f2528',
+					9: '#e54d4d',
+					11: '#f5a3a3',
+				},
 			},
 			fontFamily: {
-				sans: ['"Inter Variable"', 'Inter', ...defaultTheme.fontFamily.sans],
-				heading: ['"Space Grotesk Variable"', 'Space Grotesk', ...defaultTheme.fontFamily.sans],
-				mono: ['"JetBrains Mono Variable"', 'JetBrains Mono', ...defaultTheme.fontFamily.mono]
+				sans: ['"Geist Sans"', ...defaultTheme.fontFamily.sans],
+				mono: ['"Geist Mono"', '"JetBrains Mono Variable"', 'JetBrains Mono', ...defaultTheme.fontFamily.mono],
+			},
+			fontSize: {
+				'2xs': ['0.6875rem', { lineHeight: '1rem' }],  // 11px
 			},
 			animation: {
-				'pulse-glow': 'pulse-glow 2s ease-in-out infinite',
-				wiggle: 'wiggle 0.5s ease-in-out infinite',
-				'slide-up': 'slide-up 0.3s ease-out backwards'
+				'glow-pulse': 'glow-pulse 2s ease-in-out infinite',
+				'fade-in': 'fade-in 0.15s ease-out',
+				'slide-in': 'slide-in 0.2s ease-out backwards',
 			},
 			keyframes: {
-				'pulse-glow': {
-					'0%, 100%': { boxShadow: '0 0 0 0 rgba(34, 197, 94, 0.4)' },
-					'50%': { boxShadow: '0 0 0 8px rgba(34, 197, 94, 0)' }
+				'glow-pulse': {
+					'0%, 100%': { opacity: '1' },
+					'50%': { opacity: '0.5' },
 				},
-				wiggle: {
-					'0%, 100%': { transform: 'rotate(0deg)' },
-					'25%': { transform: 'rotate(-1deg)' },
-					'75%': { transform: 'rotate(1deg)' }
+				'fade-in': {
+					from: { opacity: '0' },
+					to: { opacity: '1' },
 				},
-				'slide-up': {
-					from: { opacity: '0', transform: 'translateY(12px)' },
-					to: { opacity: '1', transform: 'translateY(0)' }
-				}
-			}
-		}
+				'slide-in': {
+					from: { opacity: '0', transform: 'translateY(4px)' },
+					to: { opacity: '1', transform: 'translateY(0)' },
+				},
+			},
+			boxShadow: {
+				'card': 'inset 0 1px 0 0 rgba(255,255,255,0.03), 0 1px 2px 0 rgba(0,0,0,0.4)',
+				'card-hover': 'inset 0 1px 0 0 rgba(255,255,255,0.05), 0 4px 16px -4px rgba(0,0,0,0.5)',
+				'card-active': 'inset 0 1px 0 0 rgba(34,211,238,0.1), 0 0 0 1px rgba(34,211,238,0.15), 0 4px 20px -4px rgba(34,211,238,0.2)',
+				'card-pending': 'inset 0 1px 0 0 rgba(234,179,8,0.08), 0 0 0 1px rgba(234,179,8,0.2)',
+				'popup': '0 0 0 1px rgba(255,255,255,0.05), 0 16px 40px -8px rgba(0,0,0,0.6)',
+				'glow-active': '0 0 20px -4px rgba(34,211,238,0.4)',
+				'glow-pending': '0 0 16px -4px rgba(234,179,8,0.3)',
+			},
+			backgroundImage: {
+				'card-gradient': 'linear-gradient(to bottom, rgba(255,255,255,0.02) 0%, transparent 100%)',
+				'card-gradient-active': 'linear-gradient(to bottom, rgba(34,211,238,0.03) 0%, transparent 100%)',
+				'card-gradient-pending': 'linear-gradient(to bottom, rgba(234,179,8,0.02) 0%, transparent 100%)',
+				'noise': "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E\")",
+			},
+		},
 	},
-	plugins: []
+	plugins: [],
 };
