@@ -240,57 +240,137 @@ export async function notifyNeedsApproval(sessionInfo: {
 }
 
 /**
- * Find a Claude session (✳ prefix) with matching working directory
+ * Find an iTerm tab containing specific text and focus it
+ * Returns true if found and focused, false otherwise
  */
-async function findClaudeSessionByCwd(targetCwd: string): Promise<boolean> {
-  const sessions = await getAlliTermSessions();
-  console.log(`[findClaudeSessionByCwd] Looking for cwd="${targetCwd}"`);
-  console.log(`[findClaudeSessionByCwd] Found sessions:`, sessions.map(s => `${s.name} @ ${s.cwd}`));
-  // Look for a Claude session with matching cwd
-  const found = sessions.some(s => s.name.startsWith("✳") && s.cwd === targetCwd);
-  console.log(`[findClaudeSessionByCwd] Match found: ${found}`);
-  return found;
+/**
+ * Normalize text to alphanumeric + spaces only for reliable matching
+ */
+function normalizeForMatch(text: string): string {
+  return text
+    .replace(/[^a-zA-Z0-9 ]/g, ' ')  // Replace everything except letters, numbers, spaces with space
+    .replace(/\s+/g, ' ')             // Collapse whitespace
+    .trim()
+    .toLowerCase();                   // Case insensitive
+}
+
+async function findAndFocusTabByText(searchText: string): Promise<boolean> {
+  if (!isMacOS || !searchText) return false;
+
+  // Normalize and take LAST 40 chars for matching
+  const normalized = normalizeForMatch(searchText);
+  const snippet = normalized.length > 40 ? normalized.slice(-40) : normalized;
+
+  if (snippet.length < 10) {
+    return false;
+  }
+
+  try {
+    // Search in ALL tabs using 'contents' (full scrollback)
+    // Note: We search all tabs, not just ✳ ones, because resumed sessions lose the ✳ prefix when Claude exits
+    const { stdout } = await execAsync(`osascript <<'APPLESCRIPT'
+set searchSnippet to "${snippet}"
+tell application "iTerm2"
+    repeat with w in windows
+        repeat with t in tabs of w
+            repeat with s in sessions of t
+                tell s
+                    set sessionContents to contents
+                end tell
+                -- Normalize: lowercase, alphanumeric + spaces only
+                set normalizedText to do shell script "echo " & quoted form of sessionContents & " | tr -cd 'a-zA-Z0-9 ' | tr '[:upper:]' '[:lower:]' | tr -s ' '"
+                if normalizedText contains searchSnippet then
+                    -- Found it! Focus this tab
+                    activate
+                    select t
+                    tell s to select
+                    return "found"
+                end if
+            end repeat
+        end repeat
+    end repeat
+    return "not found"
+end tell
+APPLESCRIPT`);
+    return stdout.trim() === "found";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Find a Claude tab by cwd (fallback when text search fails)
+ */
+async function findAndFocusClaudeTabByCwd(targetCwd: string): Promise<boolean> {
+  if (!isMacOS) return false;
+
+  console.log(`[findAndFocusClaudeTabByCwd] Looking for cwd: ${targetCwd}`);
+
+  try {
+    const { stdout } = await execAsync(`osascript <<'APPLESCRIPT'
+tell application "iTerm2"
+    repeat with w in windows
+        repeat with t in tabs of w
+            repeat with s in sessions of t
+                set sessionName to name of s
+                if sessionName starts with "✳" then
+                    tell s
+                        set sessionCwd to variable named "path"
+                    end tell
+                    if sessionCwd is "${targetCwd}" then
+                        activate
+                        select t
+                        tell s to select
+                        return "found"
+                    end if
+                end if
+            end repeat
+        end repeat
+    end repeat
+    return "not found"
+end tell
+APPLESCRIPT`);
+    const found = stdout.trim() === "found";
+    console.log(`[findAndFocusClaudeTabByCwd] Result: ${found ? "found and focused" : "not found"}`);
+    return found;
+  } catch (error) {
+    console.error("[findAndFocusClaudeTabByCwd] Error:", (error as Error).message);
+    return false;
+  }
 }
 
 /**
  * Smart focus or open:
- * - Idle sessions always open new tab (no active process)
- * - Active sessions try to focus existing tab, fallback to open
+ * 1. Try to find tab by searching for last agent message (last 40 chars)
+ * 2. Fallback: search for sessionId (from `claude --resume <sessionId>` command)
+ * 3. If not found, open new tab
  */
 export async function focusOrOpenSession(options: {
   cwd: string;
   sessionId: string;
   status?: string;
+  lastAgentMessage?: string;
 }): Promise<{ action: "focused" | "opened" | "failed" }> {
   if (!isMacOS) return { action: "failed" };
 
-  const { cwd, sessionId, status } = options;
-  console.log(`[focus-or-open] status=${status}, cwd=${cwd}, sessionId=${sessionId.slice(0, 8)}`);
+  const { cwd, sessionId, lastAgentMessage } = options;
 
-  // Idle sessions: always open new tab (the process has exited)
-  if (status === "idle") {
-    console.log(`[focus-or-open] idle session, opening new tab...`);
-    const opened = await openSessionInITerm({ cwd, sessionId });
-    console.log(`[focus-or-open] open result=${opened}`);
-    return { action: opened ? "opened" : "failed" };
-  }
-
-  // Active sessions: try to focus existing tab
-  const hasMatchingTab = await findClaudeSessionByCwd(cwd);
-  console.log(`[focus-or-open] hasMatchingTab=${hasMatchingTab}`);
-
-  if (hasMatchingTab) {
-    const focused = await focusiTermSession();
-    console.log(`[focus-or-open] focus result=${focused}`);
+  // Try to find tab by searching for last agent message
+  if (lastAgentMessage) {
+    const focused = await findAndFocusTabByText(lastAgentMessage);
     if (focused) {
       return { action: "focused" };
     }
   }
 
+  // Fallback: search for sessionId (from `claude --resume <sessionId>` command)
+  const focusedBySessionId = await findAndFocusTabByText(sessionId);
+  if (focusedBySessionId) {
+    return { action: "focused" };
+  }
+
   // No matching tab found - open new one
-  console.log(`[focus-or-open] opening new tab...`);
   const opened = await openSessionInITerm({ cwd, sessionId });
-  console.log(`[focus-or-open] open result=${opened}`);
   return { action: opened ? "opened" : "failed" };
 }
 

@@ -108,12 +108,24 @@ function getCIStatusColor(status: CIStatus): "green" | "red" | "yellow" | "gray"
 
 const API_BASE = "http://127.0.0.1:4451";
 
-async function focusOrOpenSession(cwd: string, sessionId: string, status: string): Promise<"focused" | "opened" | "failed"> {
+function getLastAgentMessage(session: Session): string | undefined {
+  // Find the last assistant message from recentOutput
+  const assistantMessages = session.recentOutput?.filter(o => o.role === "assistant") || [];
+  if (assistantMessages.length === 0) return undefined;
+  return assistantMessages[assistantMessages.length - 1].content;
+}
+
+async function focusOrOpenSession(
+  cwd: string,
+  sessionId: string,
+  status: string,
+  lastAgentMessage?: string
+): Promise<"focused" | "opened" | "failed"> {
   try {
     const res = await fetch(`${API_BASE}/focus-or-open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cwd, sessionId, status }),
+      body: JSON.stringify({ cwd, sessionId, status, lastAgentMessage }),
     });
     const data = await res.json();
     return data.action;
@@ -123,10 +135,12 @@ async function focusOrOpenSession(cwd: string, sessionId: string, status: string
 }
 
 async function handleSessionClick(session: Session): Promise<void> {
+  // Get last agent message for tab matching
+  const lastAgentMessage = getLastAgentMessage(session);
   // Smart focus or open:
   // - Idle sessions always open new tab
-  // - Active sessions try to focus existing tab
-  await focusOrOpenSession(session.cwd, session.sessionId, session.status);
+  // - Active sessions: search for tab containing last agent message
+  await focusOrOpenSession(session.cwd, session.sessionId, session.status, lastAgentMessage);
 }
 
 export function SessionCard({ session }: SessionCardProps) {

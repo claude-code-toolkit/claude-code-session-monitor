@@ -153,7 +153,7 @@ async function main(): Promise<void> {
         for await (const chunk of req) {
           body += chunk;
         }
-        const { cwd, sessionId, status } = JSON.parse(body || "{}");
+        const { cwd, sessionId, status, lastAgentMessage } = JSON.parse(body || "{}");
 
         if (!cwd || !sessionId) {
           res.writeHead(400, { "Content-Type": "application/json" });
@@ -161,7 +161,7 @@ async function main(): Promise<void> {
           return;
         }
 
-        const result = await focusOrOpenSession({ cwd, sessionId, status });
+        const result = await focusOrOpenSession({ cwd, sessionId, status, lastAgentMessage });
 
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(result));
