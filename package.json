@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "start": "concurrently -n daemon,ui -c blue,green \"pnpm serve\" \"pnpm dev:svelte\"",
+    "start:clear": "concurrently -n daemon,ui -c blue,green \"pnpm serve:clear\" \"pnpm dev:svelte\"",
     "start:react": "concurrently -n daemon,ui -c blue,green \"pnpm serve\" \"pnpm dev:react\"",
     "dev:svelte": "pnpm --filter @claude-code-ui/ui-svelte dev",
     "dev:react": "pnpm --filter @claude-code-ui/ui dev",
     "serve": "pnpm --filter @claude-code-ui/daemon serve",
+    "serve:clear": "pnpm --filter @claude-code-ui/daemon start:clear",
     "watch": "pnpm --filter @claude-code-ui/daemon watch",
     "watch:recent": "pnpm --filter @claude-code-ui/daemon watch:recent",
     "watch:active": "pnpm --filter @claude-code-ui/daemon watch:active"

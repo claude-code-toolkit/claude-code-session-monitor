@@ -5,7 +5,7 @@
 
 import { DurableStreamTestServer } from "@durable-streams/server";
 import { DurableStream } from "@durable-streams/client";
-import { sessionsStateSchema, type Session, type RecentOutput, type PRInfo } from "./schema.js";
+import { sessionsStateSchema, type Session, type RecentOutput, type PRInfo, type SessionNotification } from "./schema.js";
 import type { SessionState } from "./watcher.js";
 import type { LogEntry } from "./types.js";
 import { generateAISummary, generateGoal } from "./summarizer.js";
@@ -86,7 +86,11 @@ export class StreamServer {
   /**
    * Convert SessionState to Session schema and publish to stream
    */
-  async publishSession(sessionState: SessionState, operation: "insert" | "update" | "delete"): Promise<void> {
+  async publishSession(
+    sessionState: SessionState,
+    operation: "insert" | "update" | "delete",
+    notification?: SessionNotification | null
+  ): Promise<void> {
     if (!this.stream) {
       throw new Error("Server not started");
     }
@@ -115,6 +119,7 @@ export class StreamServer {
 
     const session: Session = {
       sessionId: sessionState.sessionId,
+      hostname: sessionState.hostname,
       cwd: sessionState.cwd,
       gitBranch: sessionState.gitBranch,
       gitRepoUrl: sessionState.gitRepoUrl,
@@ -129,6 +134,8 @@ export class StreamServer {
       summary,
       recentOutput: extractRecentOutput(sessionState.entries),
       pr,
+      terminal: null, // Terminal state is managed separately via PTY manager
+      notification: notification ?? null,
     };
 
     // Create the event using the schema helpers
@@ -163,6 +170,7 @@ export class StreamServer {
 
     const session: Session = {
       sessionId: sessionState.sessionId,
+      hostname: sessionState.hostname,
       cwd: sessionState.cwd,
       gitBranch: sessionState.gitBranch,
       gitRepoUrl: sessionState.gitRepoUrl,
@@ -177,6 +185,8 @@ export class StreamServer {
       summary,
       recentOutput: extractRecentOutput(sessionState.entries),
       pr,
+      terminal: null, // Terminal state is managed separately via PTY manager
+      notification: null, // PR updates don't trigger notifications
     };
 
     const event = sessionsStateSchema.sessions.update({ value: session });
@@ -232,27 +242,47 @@ function extractRecentOutput(entries: LogEntry[], maxItems = 8): RecentOutput[] 
   return output.slice(-maxItems);
 }
 
+// ASCII tool icons (match UI terminal aesthetic)
+const toolIcons: Record<string, string> = {
+  Edit: "~",
+  Write: "+",
+  Bash: "$",
+  Read: "?",
+  Grep: "/",
+  Glob: "*",
+  Task: ">",
+  WebFetch: "@",
+  WebSearch: "?",
+  LSP: "#",
+};
+
 /**
  * Format tool use for display
  */
 function formatToolUse(tool: string, input: Record<string, unknown>): string {
+  const icon = toolIcons[tool] || "›";
   switch (tool) {
     case "Read":
-      return `📖 Reading ${shortenPath(input.file_path as string)}`;
+      return `${icon} Read ${shortenPath(input.file_path as string)}`;
     case "Edit":
-      return `✏️ Editing ${shortenPath(input.file_path as string)}`;
+      return `${icon} Edit ${shortenPath(input.file_path as string)}`;
     case "Write":
-      return `📝 Writing ${shortenPath(input.file_path as string)}`;
-    case "Bash":
-      return `▶️ Running: ${(input.command as string)?.slice(0, 60)}`;
+      return `${icon} Write ${shortenPath(input.file_path as string)}`;
+    case "Bash": {
+      const cmd = (input.command as string)?.slice(0, 50) || "";
+      return `${icon} ${cmd}`;
+    }
     case "Grep":
-      return `🔍 Searching for "${input.pattern}"`;
+      return `${icon} grep "${input.pattern}"`;
     case "Glob":
-      return `📁 Finding files: ${input.pattern}`;
+      return `${icon} glob ${input.pattern}`;
     case "Task":
-      return `🤖 Spawning agent: ${(input.description as string) || "task"}`;
+      return `${icon} agent: ${(input.description as string) || "task"}`;
+    case "WebFetch":
+    case "WebSearch":
+      return `${icon} web: ${(input.url as string) || (input.query as string) || ""}`.slice(0, 60);
     default:
-      return `🔧 ${tool}`;
+      return `${icon} ${tool}`;
   }
 }
 

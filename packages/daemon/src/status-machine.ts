@@ -27,8 +27,8 @@ export type StatusEvent =
   | { type: "APPROVAL_TIMEOUT" }
   | { type: "STALE_TIMEOUT" };
 
-// The four possible status states
-export type StatusState = "idle" | "working" | "waiting_for_approval" | "waiting_for_input";
+// The five possible status states
+export type StatusState = "idle" | "working" | "tool_executing" | "waiting_for_approval" | "waiting_for_input";
 
 /**
  * State machine for session status.
@@ -36,7 +36,8 @@ export type StatusState = "idle" | "working" | "waiting_for_approval" | "waiting
  * States:
  * - idle: No activity for 20+ minutes
  * - working: Claude is actively processing
- * - waiting_for_approval: Tool use needs user approval
+ * - tool_executing: Tool was invoked, likely auto-approved and running
+ * - waiting_for_approval: Tool use needs user approval (after timeout)
  * - waiting_for_input: Claude finished, waiting for user
  */
 export const statusMachine = setup({
@@ -73,11 +74,11 @@ export const statusMachine = setup({
           },
         },
         ASSISTANT_TOOL_USE: {
-          target: "waiting_for_approval",
+          target: "tool_executing",
           actions: ({ context, event }) => {
             context.lastActivityAt = event.timestamp;
             context.messageCount += 1;
-            context.hasPendingToolUse = true;
+            context.hasPendingToolUse = false; // Not pending yet - might be auto-approved
             context.pendingToolIds = event.toolUseIds;
           },
         },
@@ -93,6 +94,43 @@ export const statusMachine = setup({
           target: "waiting_for_input",
           actions: ({ context }) => {
             context.hasPendingToolUse = false;
+          },
+        },
+        IDLE_TIMEOUT: {
+          target: "idle",
+        },
+      },
+    },
+    tool_executing: {
+      // State for when a tool was invoked
+      // Auto-approved tools will get TOOL_RESULT without TURN_END
+      // Manual approval tools will have TURN_END (Claude stops, waits for user)
+      on: {
+        TOOL_RESULT: {
+          target: "working",
+          actions: ({ context, event }) => {
+            context.lastActivityAt = event.timestamp;
+            context.messageCount += 1;
+            // Remove completed tools from pending
+            const remaining = context.pendingToolIds.filter(
+              (id) => !event.toolUseIds.includes(id)
+            );
+            context.pendingToolIds = remaining;
+            context.hasPendingToolUse = false;
+          },
+        },
+        TURN_END: {
+          // Turn ended while tool pending = needs approval
+          target: "waiting_for_approval",
+          actions: ({ context, event }) => {
+            context.lastActivityAt = event.timestamp;
+            context.hasPendingToolUse = true;
+          },
+        },
+        ASSISTANT_STREAMING: {
+          // Still streaming = still working
+          actions: ({ context, event }) => {
+            context.lastActivityAt = event.timestamp;
           },
         },
         IDLE_TIMEOUT: {
@@ -224,8 +262,8 @@ export function deriveStatusFromMachine(entries: LogEntry[]): {
   // Apply timeout transitions
   if (timeSinceActivity > IDLE_TIMEOUT_MS) {
     actor.send({ type: "IDLE_TIMEOUT" });
-  } else if (stateValue === "working" && context.hasPendingToolUse && timeSinceActivity > APPROVAL_TIMEOUT_MS) {
-    // Tool use pending for too long - should be in waiting_for_approval
+  } else if (stateValue === "tool_executing" && timeSinceActivity > APPROVAL_TIMEOUT_MS) {
+    // Tool has been executing for too long without result - needs approval
     actor.send({ type: "APPROVAL_TIMEOUT" });
   } else if (stateValue === "working" && !context.hasPendingToolUse && hasAssistantText && timeSinceActivity > STALE_TIMEOUT_MS) {
     // Assistant finished with text, no pending tools, stale - turn ended without marker
@@ -255,10 +293,11 @@ export function machineStatusToResult(
   lastActivityAt: string;
   messageCount: number;
 } {
-  // Map the 4 machine states to the 3 UI states
+  // Map the 5 machine states to the 3 UI states
   let status: "working" | "waiting" | "idle";
   switch (machineStatus) {
     case "working":
+    case "tool_executing":
       status = "working";
       break;
     case "waiting_for_approval":

@@ -7,7 +7,8 @@
 import dotenv from "dotenv";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { existsSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
+import os from "node:os";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 
 // Load .env from project root (handles both src and dist execution)
@@ -27,8 +28,12 @@ import { SessionWatcher, type SessionEvent, type SessionState } from "./watcher.
 import { StreamServer } from "./server.js";
 import { formatStatus } from "./status.js";
 import { checkGHAuth, isGHEnabled } from "./github.js";
-import { isNotificationsEnabled, notifyWaitingForInput, notifyNeedsApproval } from "./notify.js";
+// Browser notifications are now handled via the stream, not terminal-notifier
 import { Terminal, getTerminalType } from "./terminal.js";
+import { getMountManager } from "./mounts.js";
+import { getPtyManager, getClaudePath } from "./pty.js";
+import { createTerminalWebSocketServer } from "./terminal-ws.js";
+import { getTmuxPath } from "./tmux.js";
 
 const PORT = parseInt(process.env.PORT ?? "4450", 10);
 const API_PORT = parseInt(process.env.API_PORT ?? "4451", 10);
@@ -40,6 +45,7 @@ const colors = {
   reset: "\x1b[0m",
   dim: "\x1b[2m",
   bold: "\x1b[1m",
+  red: "\x1b[31m",
   green: "\x1b[32m",
   yellow: "\x1b[33m",
   blue: "\x1b[34m",
@@ -56,6 +62,16 @@ function isRecentSession(session: SessionState): boolean {
 }
 
 async function main(): Promise<void> {
+  // Handle --clear flag to reset state
+  const args = process.argv.slice(2);
+  if (args.includes("--clear")) {
+    const stateDir = path.join(os.homedir(), ".claude-code-ui", "streams");
+    if (existsSync(stateDir)) {
+      console.log(`${colors.yellow}Clearing state directory: ${stateDir}${colors.reset}`);
+      rmSync(stateDir, { recursive: true, force: true });
+    }
+  }
+
   console.log(`${colors.bold}Claude Code Session Daemon${colors.reset}`);
   console.log(`${colors.dim}Showing sessions from last ${MAX_AGE_HOURS} hours${colors.reset}`);
   console.log();
@@ -65,20 +81,16 @@ async function main(): Promise<void> {
   await checkGHAuth();
   const hasGHAuth = isGHEnabled();
 
-  const hasNotifications = isNotificationsEnabled();
   const terminalType = getTerminalType();
   const hasTerminal = terminalType !== "NONE";
 
-  if (!hasAnthropicKey || !hasGHAuth || !hasNotifications || !hasTerminal) {
+  if (!hasAnthropicKey || !hasGHAuth || !hasTerminal) {
     console.log(`${colors.yellow}Optional integrations:${colors.reset}`);
     if (!hasAnthropicKey) {
       console.log(`  ${colors.dim}• ANTHROPIC_API_KEY not set - AI summaries disabled${colors.reset}`);
     }
     if (!hasGHAuth) {
       console.log(`  ${colors.dim}• gh CLI not authenticated - PR/CI tracking disabled${colors.reset}`);
-    }
-    if (!hasNotifications) {
-      console.log(`  ${colors.dim}• NOTIFICATIONS_ENABLED not set - desktop notifications disabled${colors.reset}`);
     }
     if (!hasTerminal) {
       console.log(`  ${colors.dim}• TERMINAL not set or unsupported - click-to-focus disabled${colors.reset}`);
@@ -95,13 +107,38 @@ async function main(): Promise<void> {
   await streamServer.start();
 
   console.log(`Stream URL: ${colors.cyan}${streamServer.getStreamUrl()}${colors.reset}`);
+
+  // Start the PTY manager for terminal sessions
+  const ptyManager = getPtyManager();
+  ptyManager.start();
+
+  // Check tmux availability (required for terminal feature)
+  const tmuxPath = getTmuxPath();
+  if (tmuxPath) {
+    console.log(`tmux: ${colors.cyan}${tmuxPath}${colors.reset}`);
+  } else {
+    console.log(`${colors.red}Error: tmux not found - terminal feature disabled${colors.reset}`);
+    console.log(`${colors.dim}Install with: brew install tmux${colors.reset}`);
+  }
+
+  // Resolve claude path early (will warn if not found)
+  const claudePath = getClaudePath();
+  if (claudePath) {
+    console.log(`Claude CLI: ${colors.cyan}${claudePath}${colors.reset}`);
+  } else {
+    console.log(`${colors.yellow}Warning: claude CLI not found - terminal feature disabled${colors.reset}`);
+  }
   console.log();
+
+  // Mount remote machines via SSHFS (if configured)
+  const mountManager = getMountManager();
+  await mountManager.mountAll();
 
   // Start simple HTTP API server for actions (like focus iTerm)
   const apiServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     // CORS headers for UI
     res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
     if (req.method === "OPTIONS") {
@@ -171,6 +208,81 @@ async function main(): Promise<void> {
       return;
     }
 
+    // GET /machines - return list of all machines (local + mounted)
+    if (req.method === "GET" && req.url === "/machines") {
+      const machines = mountManager.getMachineInfo();
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ machines }));
+      return;
+    }
+
+    // GET /terminals - list all active PTYs
+    if (req.method === "GET" && req.url === "/terminals") {
+      const terminals = ptyManager.getAllTerminalInfos();
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ terminals }));
+      return;
+    }
+
+    // POST /terminals/launcher - create launcher PTY (fzf directory picker)
+    if (req.method === "POST" && req.url === "/terminals/launcher") {
+      try {
+        let body = "";
+        for await (const chunk of req) {
+          body += chunk;
+        }
+        const { hostname } = JSON.parse(body || "{}");
+        const pty = ptyManager.createLauncher(hostname || "local");
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({
+          ptyId: pty.ptyId,
+          launcherId: pty.launcherId,
+          hostname: pty.hostname,
+        }));
+      } catch (error) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: (error as Error).message }));
+      }
+      return;
+    }
+
+    // POST /terminals - create PTY for a session
+    if (req.method === "POST" && req.url === "/terminals") {
+      try {
+        let body = "";
+        for await (const chunk of req) {
+          body += chunk;
+        }
+        const { sessionId, cwd, hostname } = JSON.parse(body || "{}");
+        if (!sessionId || !cwd) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "sessionId and cwd required" }));
+          return;
+        }
+        const pty = ptyManager.getOrCreate(sessionId, cwd, hostname || "local");
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({
+          ptyId: pty.ptyId,
+          sessionId: pty.sessionId,
+          hostname: pty.hostname,
+        }));
+      } catch (error) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: (error as Error).message }));
+      }
+      return;
+    }
+
+    // DELETE /terminals/:ptyId - kill a PTY
+    const deleteMatch = req.url?.match(/^\/terminals\/([^/]+)$/);
+    if (req.method === "DELETE" && deleteMatch) {
+      const ptyId = deleteMatch[1];
+      const success = ptyManager.kill(ptyId);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ success }));
+      return;
+    }
+
     res.writeHead(404);
     res.end("Not found");
   });
@@ -179,10 +291,15 @@ async function main(): Promise<void> {
     console.log(`API server: ${colors.cyan}http://127.0.0.1:${API_PORT}${colors.reset}`);
   });
 
+  // Attach WebSocket server for terminal I/O
+  const terminalWs = createTerminalWebSocketServer(apiServer);
+  console.log(`Terminal WebSocket: ${colors.cyan}ws://127.0.0.1:${API_PORT}/terminal${colors.reset}`);
+
   console.log();
 
-  // Start the session watcher
-  const watcher = new SessionWatcher({ debounceMs: 300 });
+  // Start the session watcher with all watch paths (local + mounted)
+  const watchPaths = mountManager.getWatchPaths();
+  const watcher = new SessionWatcher({ debounceMs: 300, watchPaths });
 
   watcher.on("session", async (event: SessionEvent) => {
     const { type, session } = event;
@@ -205,15 +322,9 @@ async function main(): Promise<void> {
       `${statusStr}`
     );
 
-    // Publish to stream
-    try {
-      const operation = type === "created" ? "insert" : type === "deleted" ? "delete" : "update";
-      await streamServer.publishSession(session, operation);
-    } catch (error) {
-      console.error(`${colors.yellow}[ERROR]${colors.reset} Failed to publish:`, error);
-    }
+    // Check if we need to send a notification
+    let notification: { type: "waiting_for_input" | "needs_approval"; timestamp: string } | null = null;
 
-    // Send notifications on status transitions
     if (type === "updated" && event.previousStatus) {
       const prevStatus = event.previousStatus.status;
       const newStatus = session.status.status;
@@ -221,16 +332,20 @@ async function main(): Promise<void> {
 
       // Notify when transitioning FROM working TO waiting/needs approval
       if (wasWorking && newStatus === "waiting") {
-        const notifyInfo = {
-          cwd: session.cwd,
-          gitRepoId: session.gitRepoId,
+        notification = {
+          type: session.status.hasPendingToolUse ? "needs_approval" : "waiting_for_input",
+          timestamp: new Date().toISOString(),
         };
-        if (session.status.hasPendingToolUse) {
-          await notifyNeedsApproval(notifyInfo);
-        } else {
-          await notifyWaitingForInput(notifyInfo);
-        }
+        console.log(`[notify] ${session.sessionId.slice(0, 8)}: ${notification.type}`);
       }
+    }
+
+    // Publish to stream (with notification if any)
+    try {
+      const operation = type === "created" ? "insert" : type === "deleted" ? "delete" : "update";
+      await streamServer.publishSession(session, operation, notification);
+    } catch (error) {
+      console.error(`${colors.yellow}[ERROR]${colors.reset} Failed to publish:`, error);
     }
   });
 
@@ -249,7 +364,10 @@ async function main(): Promise<void> {
     console.log(`${colors.dim}Shutting down...${colors.reset}`);
     clearInterval(timeoutChecker);
     watcher.stop();
+    terminalWs.close();
+    await ptyManager.stop();
     apiServer.close();
+    await mountManager.unmountAll();
     await streamServer.stop();
     process.exit(0);
   });

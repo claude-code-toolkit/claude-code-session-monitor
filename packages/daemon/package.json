@@ -6,6 +6,8 @@
     "./schema": "./src/schema.ts"
   },
   "scripts": {
+    "start": "tsx src/serve.ts",
+    "start:clear": "tsx src/serve.ts --clear",
     "serve": "tsx src/serve.ts",
     "watch": "tsx src/cli.ts",
     "watch:recent": "tsx src/cli.ts --recent",
@@ -21,10 +23,13 @@
     "@durable-streams/state": "^0.1.3",
     "chokidar": "^4.0.3",
     "dotenv": "^17.2.3",
+    "node-pty": "^1.1.0",
+    "ws": "^8.19.0",
     "zod": "^4.3.5"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "@types/ws": "^8.18.1",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vitest": "^4.0.16",

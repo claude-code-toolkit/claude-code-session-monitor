@@ -1,5 +1,5 @@
-import { readable, derived, type Readable } from 'svelte/store';
-import { getSessionsDb, type SessionsDB } from '$lib/data/sessionsDb';
+import { readable, derived, writable, type Readable, type Writable } from 'svelte/store';
+import { getSessionsDb, fetchMachines, type SessionsDB, type MachineInfo } from '$lib/data/sessionsDb';
 import type { Session } from '$lib/data/schema';
 
 // Activity score weights
@@ -108,8 +108,84 @@ export function groupSessionsByRepo(sessions: Session[]): RepoGroup[] {
 	return groupsWithScores;
 }
 
-// Singleton store instance
+// Singleton store instances
 let sessionsStore: Readable<Session[]> | null = null;
+let machinesStore: Writable<MachineInfo[]> | null = null;
+
+// Track shown notifications to avoid duplicates
+const shownNotifications = new Set<string>();
+
+// Notification mode preference
+export type NotifyMode = 'all' | 'approval_only' | 'none';
+
+export function getNotifyMode(): NotifyMode {
+	if (typeof localStorage === 'undefined') return 'all';
+	return (localStorage.getItem('notifyMode') as NotifyMode) || 'all';
+}
+
+/**
+ * Request browser notification permission
+ */
+export async function requestNotificationPermission(): Promise<boolean> {
+	if (!('Notification' in window)) {
+		console.log('[notify] Browser does not support notifications');
+		return false;
+	}
+
+	if (Notification.permission === 'granted') {
+		return true;
+	}
+
+	if (Notification.permission === 'denied') {
+		console.log('[notify] Notification permission denied');
+		return false;
+	}
+
+	const permission = await Notification.requestPermission();
+	return permission === 'granted';
+}
+
+/**
+ * Show a browser notification for a session
+ */
+function showNotification(session: Session): void {
+	if (!session.notification) return;
+
+	const key = `${session.sessionId}:${session.notification.timestamp}`;
+	if (shownNotifications.has(key)) return;
+
+	shownNotifications.add(key);
+
+	// Clean up old entries (keep last 100)
+	if (shownNotifications.size > 100) {
+		const entries = Array.from(shownNotifications);
+		entries.slice(0, entries.length - 100).forEach((e) => shownNotifications.delete(e));
+	}
+
+	if (Notification.permission !== 'granted') return;
+
+	// Check notification mode preference
+	const mode = getNotifyMode();
+	if (mode === 'none') return;
+	if (mode === 'approval_only' && session.notification.type !== 'needs_approval') return;
+
+	const dirName = session.cwd.split('/').pop() || session.cwd;
+	const title = session.notification.type === 'needs_approval' ? 'Needs Approval' : 'Waiting for Input';
+	const body = session.gitRepoId || dirName;
+
+	const notification = new Notification(`Claude: ${title}`, {
+		body,
+		tag: session.sessionId, // Replaces previous notifications for same session
+		icon: '/favicon.png',
+		requireInteraction: session.notification.type === 'needs_approval',
+	});
+
+	notification.onclick = () => {
+		window.focus();
+		notification.close();
+		// TODO: Could scroll to or highlight the session
+	};
+}
 
 /**
  * Create a readable store that subscribes to DB changes.
@@ -133,6 +209,13 @@ function createSessionsStore(): Readable<Session[]> {
 				if (db) {
 					const sessions = Array.from(db.collections.sessions.values()) as Session[];
 					set(sessions);
+
+					// Check for notifications
+					for (const session of sessions) {
+						if (session.notification) {
+							showNotification(session);
+						}
+					}
 				}
 			}, 500); // Poll every 500ms for smooth updates
 		});
@@ -146,6 +229,26 @@ function createSessionsStore(): Readable<Session[]> {
 }
 
 /**
+ * Create a writable store for machine connection status.
+ */
+function createMachinesStore(): Writable<MachineInfo[]> {
+	const store = writable<MachineInfo[]>([]);
+
+	// Initial fetch
+	fetchMachines().then((machines) => {
+		store.set(machines);
+	});
+
+	// Periodically refresh machine status
+	setInterval(async () => {
+		const machines = await fetchMachines();
+		store.set(machines);
+	}, 10000); // Refresh every 10 seconds
+
+	return store;
+}
+
+/**
  * Get or create the sessions store singleton.
  * Must be called after getSessionsDb() has been called in a layout load.
  */
@@ -154,6 +257,16 @@ export function getSessionsStore(): Readable<Session[]> {
 		sessionsStore = createSessionsStore();
 	}
 	return sessionsStore;
+}
+
+/**
+ * Get or create the machines store singleton.
+ */
+export function getMachinesStore(): Writable<MachineInfo[]> {
+	if (!machinesStore) {
+		machinesStore = createMachinesStore();
+	}
+	return machinesStore;
 }
 
 /**

@@ -1,15 +1,16 @@
 <script lang="ts">
 	import type { Session } from '$lib/data/schema';
-	import { focusOrOpenSession, getLastAgentMessage } from '$lib/utils/api';
 	import {
 		formatTimeAgo,
 		formatTarget,
 		formatDirPath,
 		getCIStatusIcon,
 		getRoleColor,
+		getRolePrefix,
 		toolIcons
 	} from '$lib/utils/formatters';
 	import { dismissedSessions } from '$lib/stores/dismissed';
+	import { terminals } from '$lib/stores/terminals';
 
 	export let session: Session;
 	export let status: 'working' | 'pending' | 'waiting' | 'idle' = 'idle';
@@ -21,6 +22,8 @@
 
 	$: showPendingTool = session.hasPendingToolUse && session.pendingTool;
 	$: dirPath = formatDirPath(session.cwd);
+	// Check if this session has an open terminal (reactive)
+	$: hasOpenTerminal = $terminals.some((t) => t.sessionId === session.sessionId);
 
 	// Status-specific card styles
 	const cardStyles = {
@@ -30,9 +33,9 @@
 		idle: 'shadow-card border-carbon-6/40',
 	};
 
-	async function handleClick() {
-		const lastAgentMessage = getLastAgentMessage(session);
-		await focusOrOpenSession(session.cwd, session.sessionId, session.status, lastAgentMessage);
+	function handleClick() {
+		// Open or focus terminal for this session
+		terminals.open(session.sessionId, session.cwd, session.hostname);
 	}
 
 	function handleKeydown(event: KeyboardEvent) {
@@ -42,7 +45,24 @@
 		}
 	}
 
+	// Hover preview with delay
 	let showPreview = false;
+	let hoverTimeout: ReturnType<typeof setTimeout> | null = null;
+	const HOVER_DELAY = 400; // ms before showing preview
+
+	function handleMouseEnter() {
+		hoverTimeout = setTimeout(() => {
+			showPreview = true;
+		}, HOVER_DELAY);
+	}
+
+	function handleMouseLeave() {
+		if (hoverTimeout) {
+			clearTimeout(hoverTimeout);
+			hoverTimeout = null;
+		}
+		showPreview = false;
+	}
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -54,8 +74,8 @@
 	style="height: 120px; min-height: 120px; max-height: 120px;"
 	on:click={handleClick}
 	on:keydown={handleKeydown}
-	on:mouseenter={() => (showPreview = true)}
-	on:mouseleave={() => (showPreview = false)}
+	on:mouseenter={handleMouseEnter}
+	on:mouseleave={handleMouseLeave}
 	role="button"
 	tabindex="0"
 >
@@ -78,27 +98,33 @@
 	<div class="relative px-3 py-2.5 h-full flex flex-col overflow-hidden">
 		<!-- Status badge - terminal style -->
 		<div class="flex items-center justify-between gap-2 mb-1.5 shrink-0 overflow-hidden">
-			{#if status === 'working'}
-				<span class="inline-flex items-center gap-1.5 text-2xs font-mono shrink-0">
-					<span class="text-active-9 animate-glow-pulse">▸</span>
-					<span class="text-active-11 uppercase tracking-wider">working</span>
-				</span>
-			{:else if status === 'pending'}
-				<span class="inline-flex items-center gap-1.5 text-2xs font-mono shrink-0">
-					<span class="text-pending-9">◆</span>
-					<span class="text-pending-11 uppercase tracking-wider">needs input</span>
-				</span>
-			{:else if status === 'waiting'}
-				<span class="inline-flex items-center gap-1.5 text-2xs font-mono text-carbon-9 shrink-0">
-					<span>○</span>
-					<span class="uppercase tracking-wider">waiting</span>
-				</span>
-			{:else}
-				<span class="inline-flex items-center gap-1.5 text-2xs font-mono text-carbon-8 shrink-0">
-					<span>·</span>
-					<span class="uppercase tracking-wider">idle</span>
-				</span>
-			{/if}
+			<div class="flex items-center gap-2">
+				{#if status === 'working'}
+					<span class="inline-flex items-center gap-1.5 text-2xs font-mono shrink-0">
+						<span class="text-active-9 animate-glow-pulse">▸</span>
+						<span class="text-active-11 uppercase tracking-wider">working</span>
+					</span>
+				{:else if status === 'pending'}
+					<span class="inline-flex items-center gap-1.5 text-2xs font-mono shrink-0">
+						<span class="text-pending-9">◆</span>
+						<span class="text-pending-11 uppercase tracking-wider">needs input</span>
+					</span>
+				{:else if status === 'waiting'}
+					<span class="inline-flex items-center gap-1.5 text-2xs font-mono text-carbon-9 shrink-0">
+						<span>○</span>
+						<span class="uppercase tracking-wider">waiting</span>
+					</span>
+				{:else}
+					<span class="inline-flex items-center gap-1.5 text-2xs font-mono text-carbon-8 shrink-0">
+						<span>·</span>
+						<span class="uppercase tracking-wider">idle</span>
+					</span>
+				{/if}
+
+				{#if hasOpenTerminal}
+					<span class="text-2xs font-mono text-accent-9 shrink-0" title="Terminal open">▣</span>
+				{/if}
+			</div>
 
 			<span class="text-2xs font-mono text-carbon-8 tabular-nums shrink-0">{formatTimeAgo(session.lastActivityAt)}</span>
 		</div>
@@ -148,7 +174,12 @@
 				{/if}
 			</div>
 
-			<span class="text-2xs font-mono text-carbon-8 shrink-0 tabular-nums whitespace-nowrap">{session.messageCount} msg</span>
+			<div class="flex items-center gap-2 shrink-0">
+				{#if session.hostname}
+					<span class="text-2xs font-mono text-carbon-7 truncate max-w-[80px]" title={session.hostname}>@{session.hostname}</span>
+				{/if}
+				<span class="text-2xs font-mono text-carbon-8 tabular-nums whitespace-nowrap">{session.messageCount} msg</span>
+			</div>
 		</div>
 	</div>
 
@@ -163,23 +194,31 @@
 			<div class="absolute inset-0 opacity-[0.02] bg-noise pointer-events-none rounded-lg"></div>
 
 			<!-- Preview header -->
-			<div class="relative px-3 py-2.5 border-b border-carbon-6/50 flex items-center justify-between">
-				<span class="text-sm font-medium text-carbon-12 truncate flex-1">
-					{session.goal || session.originalPrompt.slice(0, 50)}
-				</span>
-				<code class="text-2xs font-mono text-carbon-8 ml-2 shrink-0">{session.sessionId.slice(0, 8)}</code>
+			<div class="relative px-3 py-2.5 border-b border-carbon-6/50">
+				<div class="flex items-center justify-between mb-1">
+					<span class="text-sm font-medium text-carbon-12 truncate flex-1">
+						{session.goal || session.originalPrompt.slice(0, 50)}
+					</span>
+					<code class="text-2xs font-mono text-carbon-8 ml-2 shrink-0">{session.sessionId.slice(0, 8)}</code>
+				</div>
+				{#if session.summary}
+					<p class="text-xs text-carbon-9 truncate">{session.summary}</p>
+				{/if}
 			</div>
 
 			<!-- Recent output - terminal style -->
 			<div class="relative flex-1 overflow-hidden p-3">
-				<div class="bg-carbon-1 rounded border border-carbon-6/40 p-3 max-h-[260px] overflow-y-auto font-mono text-xs">
-					{#each session.recentOutput as output, i}
-						<p
-							class="{getRoleColor(output.role)} whitespace-pre-wrap leading-relaxed"
-							class:mb-2={i < session.recentOutput.length - 1}
-						>
-							{#if output.role === 'user'}<span class="text-accent-9">❯ </span>{/if}{output.content}
-						</p>
+				<div class="bg-carbon-1 rounded border border-carbon-6/40 p-3 max-h-[260px] overflow-y-auto font-mono text-xs space-y-1.5">
+					{#each session.recentOutput as output}
+						<div class="{getRoleColor(output.role)} leading-relaxed">
+							{#if output.role === 'user'}
+								<span class="text-accent-9 select-none">❯ </span><span class="whitespace-pre-wrap">{output.content}</span>
+							{:else if output.role === 'tool'}
+								<span class="text-carbon-7 select-none">  </span><span class="text-carbon-10">{output.content}</span>
+							{:else}
+								<span class="whitespace-pre-wrap">{output.content}</span>
+							{/if}
+						</div>
 					{/each}
 					{#if status === 'working'}
 						<span class="text-active-9 animate-glow-pulse">▌</span>

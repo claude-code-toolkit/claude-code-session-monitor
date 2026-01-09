@@ -2,9 +2,19 @@ import { createStreamDB, type StreamDB } from "@durable-streams/state";
 import { sessionsStateSchema } from "./schema";
 
 const STREAM_PORT = import.meta.env.VITE_STREAM_PORT || '4450';
+const API_PORT = import.meta.env.VITE_API_PORT || '4451';
 const STREAM_URL = `http://127.0.0.1:${STREAM_PORT}/sessions`;
+const API_URL = `http://127.0.0.1:${API_PORT}`;
 
 export type SessionsDB = StreamDB<typeof sessionsStateSchema>;
+
+// Machine info from the daemon
+export interface MachineInfo {
+  name: string;
+  mountPoint: string;
+  status: "mounting" | "mounted" | "unmounted" | "error";
+  error?: string;
+}
 
 let dbInstance: SessionsDB | null = null;
 let dbPromise: Promise<SessionsDB> | null = null;
@@ -49,6 +59,24 @@ export function getSessionsDbSync(): SessionsDB {
     throw new Error("SessionsDB not initialized. Call getSessionsDb() first in a layout load.");
   }
   return dbInstance;
+}
+
+/**
+ * Fetch machine connection status from daemon API
+ */
+export async function fetchMachines(): Promise<MachineInfo[]> {
+  try {
+    const response = await fetch(`${API_URL}/machines`);
+    if (!response.ok) {
+      console.error("Failed to fetch machines:", response.statusText);
+      return [];
+    }
+    const data = await response.json();
+    return data.machines || [];
+  } catch (error) {
+    console.error("Failed to fetch machines:", error);
+    return [];
+  }
 }
 
 /**

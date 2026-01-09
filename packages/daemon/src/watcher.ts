@@ -1,8 +1,10 @@
 import { watch, type FSWatcher } from "chokidar";
 import { EventEmitter } from "node:events";
+import os from "node:os";
 import {
   tailJSONL,
   extractMetadata,
+  extractLatestPrompt,
   extractSessionId,
   extractEncodedDir,
 } from "./parser.js";
@@ -10,10 +12,16 @@ import { deriveStatus, statusChanged } from "./status.js";
 import { getGitInfoCached, type GitInfo } from "./git.js";
 import type { LogEntry, SessionMetadata, StatusResult } from "./types.js";
 
-const CLAUDE_PROJECTS_DIR = `${process.env.HOME}/.claude/projects`;
+const DEFAULT_CLAUDE_PROJECTS_DIR = `${process.env.HOME}/.claude/projects`;
+
+export interface WatchPath {
+  path: string;
+  hostname: string;
+}
 
 export interface SessionState {
   sessionId: string;
+  hostname: string;  // Machine hostname for multi-machine support
   filepath: string;
   encodedDir: string;
   cwd: string;
@@ -39,16 +47,40 @@ export class SessionWatcher extends EventEmitter {
   private sessions = new Map<string, SessionState>();
   private debounceTimers = new Map<string, NodeJS.Timeout>();
   private debounceMs: number;
+  private watchPaths: WatchPath[];
 
-  constructor(options: { debounceMs?: number } = {}) {
+  constructor(options: { debounceMs?: number; watchPaths?: WatchPath[] } = {}) {
     super();
     this.debounceMs = options.debounceMs ?? 200;
+    // Default to local claude projects dir with local hostname
+    this.watchPaths = options.watchPaths ?? [
+      {
+        path: DEFAULT_CLAUDE_PROJECTS_DIR,
+        hostname: process.env.HOSTNAME || os.hostname(),
+      },
+    ];
+  }
+
+  /**
+   * Get hostname for a file path based on which watch path it belongs to
+   */
+  private getHostnameForPath(filepath: string): string {
+    for (const wp of this.watchPaths) {
+      if (filepath.startsWith(wp.path)) {
+        return wp.hostname;
+      }
+    }
+    // Fallback to local hostname
+    return process.env.HOSTNAME || os.hostname();
   }
 
   async start(): Promise<void> {
+    const pathsToWatch = this.watchPaths.map(wp => wp.path);
+    console.log(`[watcher] Watching ${pathsToWatch.length} path(s):`, pathsToWatch);
+
     // Use directory watching instead of glob - chokidar has issues with
     // directories that start with dashes when using glob patterns
-    this.watcher = watch(CLAUDE_PROJECTS_DIR, {
+    this.watcher = watch(pathsToWatch, {
       ignored: /agent-.*\.jsonl$/,  // Ignore agent sub-session files
       persistent: true,
       ignoreInitial: false,
@@ -129,9 +161,51 @@ export class SessionWatcher extends EventEmitter {
     this.debounceTimers.set(filepath, timer);
   }
 
+  /**
+   * When a new session is created for the same cwd, remove older sessions.
+   * This handles the case when `/clear` is run and Claude creates a new session file
+   * but stays in the same tmux session.
+   */
+  private removeSupersededSessions(newSession: SessionState): void {
+    const toRemove: string[] = [];
+
+    for (const [sessionId, session] of this.sessions) {
+      // Skip the new session itself
+      if (sessionId === newSession.sessionId) continue;
+
+      // Skip sessions on different hosts
+      if (session.hostname !== newSession.hostname) continue;
+
+      // Check if same cwd and idle (not working or waiting)
+      // Only remove truly idle sessions - waiting means user is actively in conversation
+      if (
+        session.cwd === newSession.cwd &&
+        session.status.status === "idle"
+      ) {
+        toRemove.push(sessionId);
+      }
+    }
+
+    // Remove superseded sessions
+    for (const sessionId of toRemove) {
+      const session = this.sessions.get(sessionId);
+      if (session) {
+        this.sessions.delete(sessionId);
+        this.emit("session", {
+          type: "deleted",
+          session,
+        } satisfies SessionEvent);
+
+        console.log(
+          `[watcher] Removed superseded session ${sessionId.slice(0, 8)} (replaced by ${newSession.sessionId.slice(0, 8)})`
+        );
+      }
+    }
+  }
+
   private async handleFile(
     filepath: string,
-    eventType: "add" | "change"
+    _eventType: "add" | "change"
   ): Promise<void> {
     try {
       const sessionId = extractSessionId(filepath);
@@ -161,11 +235,13 @@ export class SessionWatcher extends EventEmitter {
       let gitInfo: GitInfo;
 
       if (existingSession) {
+        // Update prompt to latest meaningful user message
+        const latestPrompt = extractLatestPrompt(allEntries);
         metadata = {
           sessionId: existingSession.sessionId,
           cwd: existingSession.cwd,
           gitBranch: existingSession.gitBranch,
-          originalPrompt: existingSession.originalPrompt,
+          originalPrompt: latestPrompt || existingSession.originalPrompt,
           startedAt: existingSession.startedAt,
         };
         // Reuse cached git info
@@ -192,6 +268,7 @@ export class SessionWatcher extends EventEmitter {
       // Build session state - prefer branch from git info over log entry
       const session: SessionState = {
         sessionId,
+        hostname: this.getHostnameForPath(filepath),
         filepath,
         encodedDir: extractEncodedDir(filepath),
         cwd: metadata.cwd,
@@ -214,6 +291,9 @@ export class SessionWatcher extends EventEmitter {
       const hasNewMessages = existingSession && status.messageCount > existingSession.status.messageCount;
 
       if (isNew) {
+        // Remove older sessions in the same cwd that are superseded
+        this.removeSupersededSessions(session);
+
         this.emit("session", {
           type: "created",
           session,

@@ -114,9 +114,10 @@ export function extractMetadata(entries: LogEntry[]): SessionMetadata | null {
     }
 
     // Get original prompt from first user message (not tool result)
+    // Skip system-injected messages
     if (entry.type === "user" && !originalPrompt) {
       const content = entry.message.content;
-      if (typeof content === "string") {
+      if (typeof content === "string" && !isSystemMessage(content)) {
         originalPrompt =
           content.length > 300 ? content.slice(0, 300) + "..." : content;
       }
@@ -135,6 +136,39 @@ export function extractMetadata(entries: LogEntry[]): SessionMetadata | null {
     originalPrompt: originalPrompt ?? "(no prompt found)",
     startedAt,
   };
+}
+
+/**
+ * Check if a message content is a system-injected message that should be skipped
+ * when determining the session prompt/title.
+ */
+function isSystemMessage(content: string): boolean {
+  return (
+    content.startsWith("<local-command-caveat>") ||
+    content.startsWith("<system-reminder>") ||
+    content.startsWith("<command-name>")
+  );
+}
+
+/**
+ * Extract the latest meaningful user prompt from log entries.
+ * Skips system-injected messages and tool results.
+ * Returns null if no meaningful prompt found.
+ */
+export function extractLatestPrompt(entries: LogEntry[]): string | null {
+  let latestPrompt: string | null = null;
+
+  for (const entry of entries) {
+    if (entry.type === "user") {
+      const content = entry.message.content;
+      if (typeof content === "string" && !isSystemMessage(content)) {
+        latestPrompt =
+          content.length > 300 ? content.slice(0, 300) + "..." : content;
+      }
+    }
+  }
+
+  return latestPrompt;
 }
 
 /**
