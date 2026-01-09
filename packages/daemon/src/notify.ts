@@ -6,7 +6,7 @@ import { exec } from "node:child_process";
 import { platform, tmpdir } from "node:os";
 import { writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
-import { ITerm } from "./iterm.js";
+import { Terminal } from "./terminal.js";
 
 const isMacOS = platform() === "darwin";
 
@@ -103,7 +103,7 @@ export async function notifyWaitingForInput(sessionInfo: {
   gitRepoId?: string | null;
 }): Promise<void> {
   const dirName = sessionInfo.cwd.split("/").pop() || sessionInfo.cwd;
-  const iTermName = await ITerm.getCurrentClaudeSessionName();
+  const iTermName = await Terminal.getCurrentClaudeSessionName();
   const subtitle = iTermName || sessionInfo.gitRepoId || dirName;
 
   sendNotification({
@@ -122,7 +122,7 @@ export async function notifyNeedsApproval(sessionInfo: {
   gitRepoId?: string | null;
 }): Promise<void> {
   const dirName = sessionInfo.cwd.split("/").pop() || sessionInfo.cwd;
-  const iTermName = await ITerm.getCurrentClaudeSessionName();
+  const iTermName = await Terminal.getCurrentClaudeSessionName();
   const subtitle = iTermName || sessionInfo.gitRepoId || dirName;
 
   sendNotification({

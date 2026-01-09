@@ -1,6 +1,12 @@
 /**
- * iTerm2 tab management for macOS
- * Handles finding, focusing, and opening iTerm sessions
+ * Terminal abstraction for tab management and focusing.
+ * Supports different terminal emulators via TERMINAL env var.
+ *
+ * Supported terminals:
+ * - iterm2 (default on macOS)
+ * - none (disable terminal features)
+ *
+ * Future: terminal, kitty, warp, alacritty
  */
 
 import { exec } from "node:child_process";
@@ -10,9 +16,37 @@ import { platform } from "node:os";
 const execAsync = promisify(exec);
 const isMacOS = platform() === "darwin";
 
-interface ITermSession {
-  name: string;
-  cwd: string;
+export type TerminalType = "iterm2" | "none";
+
+/**
+ * Get configured terminal type from env var
+ */
+export function getTerminalType(): TerminalType {
+  const terminal = process.env.TERMINAL?.toLowerCase();
+
+  if (terminal === "none" || terminal === "disabled") {
+    return "none";
+  }
+
+  if (terminal === "iterm2" || terminal === "iterm") {
+    return "iterm2";
+  }
+
+  // Default: iterm2 on macOS, none otherwise
+  if (!terminal) {
+    return isMacOS ? "iterm2" : "none";
+  }
+
+  // Unknown terminal - warn and disable
+  console.warn(`Unknown TERMINAL="${terminal}", disabling terminal features. Supported: iterm2, none`);
+  return "none";
+}
+
+/**
+ * Check if terminal features are enabled
+ */
+export function isTerminalEnabled(): boolean {
+  return getTerminalType() !== "none";
 }
 
 /**
@@ -26,20 +60,12 @@ function normalizeForMatch(text: string): string {
     .toLowerCase();
 }
 
-export class ITerm {
-  /**
-   * Check if we're on macOS (iTerm features only work there)
-   */
-  static get isSupported(): boolean {
-    return isMacOS;
-  }
+// =============================================================================
+// iTerm2 Implementation
+// =============================================================================
 
-  /**
-   * Get all iTerm2 sessions with their names and working directories
-   */
-  static async getAllSessions(): Promise<ITermSession[]> {
-    if (!isMacOS) return [];
-
+const iterm2 = {
+  async getAllSessions(): Promise<{ name: string; cwd: string }[]> {
     try {
       const { stdout } = await execAsync(`osascript -e '
 tell application "iTerm2"
@@ -69,23 +95,15 @@ end tell
     } catch {
       return [];
     }
-  }
+  },
 
-  /**
-   * Get the current Claude session name (first one with sparkle prefix)
-   */
-  static async getCurrentClaudeSessionName(): Promise<string | null> {
+  async getCurrentClaudeSessionName(): Promise<string | null> {
     const sessions = await this.getAllSessions();
     const claude = sessions.find((s) => s.name.startsWith("✳"));
     return claude?.name || null;
-  }
+  },
 
-  /**
-   * Focus an iTerm session by name search term
-   */
-  static async focusByName(searchTerm?: string): Promise<boolean> {
-    if (!isMacOS) return false;
-
+  async focusByName(searchTerm?: string): Promise<boolean> {
     try {
       const searchCondition = searchTerm
         ? `sessionName contains "${searchTerm.replace(/"/g, '\\"')}"`
@@ -113,14 +131,10 @@ APPLESCRIPT`);
     } catch {
       return false;
     }
-  }
+  },
 
-  /**
-   * Find and focus a tab by searching its scrollback contents
-   * Uses normalized alphanumeric matching on last 40 chars of search text
-   */
-  static async focusByContent(searchText: string): Promise<boolean> {
-    if (!isMacOS || !searchText) return false;
+  async focusByContent(searchText: string): Promise<boolean> {
+    if (!searchText) return false;
 
     const normalized = normalizeForMatch(searchText);
     const snippet = normalized.length > 40 ? normalized.slice(-40) : normalized;
@@ -128,8 +142,6 @@ APPLESCRIPT`);
     if (snippet.length < 10) return false;
 
     try {
-      // Search ALL tabs using 'contents' (full scrollback buffer)
-      // We search all tabs because resumed sessions lose the sparkle prefix when Claude exits
       const { stdout } = await execAsync(`osascript <<'APPLESCRIPT'
 set searchSnippet to "${snippet}"
 tell application "iTerm2"
@@ -139,7 +151,6 @@ tell application "iTerm2"
                 tell s
                     set sessionContents to contents
                 end tell
-                -- Normalize: lowercase, alphanumeric + spaces only
                 set normalizedText to do shell script "echo " & quoted form of sessionContents & " | tr -cd 'a-zA-Z0-9 ' | tr '[:upper:]' '[:lower:]' | tr -s ' '"
                 if normalizedText contains searchSnippet then
                     activate
@@ -157,14 +168,9 @@ APPLESCRIPT`);
     } catch {
       return false;
     }
-  }
+  },
 
-  /**
-   * Open a new iTerm tab, cd to directory, and run a command
-   */
-  static async openTab(options: { cwd: string; command: string }): Promise<boolean> {
-    if (!isMacOS) return false;
-
+  async openTab(options: { cwd: string; command: string }): Promise<boolean> {
     const { cwd, command } = options;
 
     try {
@@ -186,20 +192,82 @@ APPLESCRIPT`);
     } catch {
       return false;
     }
-  }
+  },
+};
+
+// =============================================================================
+// Public Terminal API
+// =============================================================================
+
+export const Terminal = {
+  /**
+   * Check if terminal features are available
+   */
+  get isSupported(): boolean {
+    return isTerminalEnabled();
+  },
 
   /**
-   * Smart focus or open a Claude session:
-   * 1. Search for tab containing last agent message
-   * 2. Fallback: search for sessionId in tab content
-   * 3. If not found: open new tab with claude --resume
+   * Get the configured terminal type
    */
-  static async focusOrOpen(options: {
+  get type(): TerminalType {
+    return getTerminalType();
+  },
+
+  /**
+   * Get all terminal sessions
+   */
+  async getAllSessions(): Promise<{ name: string; cwd: string }[]> {
+    const type = getTerminalType();
+    if (type === "iterm2") return iterm2.getAllSessions();
+    return [];
+  },
+
+  /**
+   * Get the current Claude session name (with sparkle prefix)
+   */
+  async getCurrentClaudeSessionName(): Promise<string | null> {
+    const type = getTerminalType();
+    if (type === "iterm2") return iterm2.getCurrentClaudeSessionName();
+    return null;
+  },
+
+  /**
+   * Focus a tab by name search
+   */
+  async focusByName(searchTerm?: string): Promise<boolean> {
+    const type = getTerminalType();
+    if (type === "iterm2") return iterm2.focusByName(searchTerm);
+    return false;
+  },
+
+  /**
+   * Focus a tab by searching its content
+   */
+  async focusByContent(searchText: string): Promise<boolean> {
+    const type = getTerminalType();
+    if (type === "iterm2") return iterm2.focusByContent(searchText);
+    return false;
+  },
+
+  /**
+   * Open a new tab with a command
+   */
+  async openTab(options: { cwd: string; command: string }): Promise<boolean> {
+    const type = getTerminalType();
+    if (type === "iterm2") return iterm2.openTab(options);
+    return false;
+  },
+
+  /**
+   * Smart focus or open a Claude session
+   */
+  async focusOrOpen(options: {
     cwd: string;
     sessionId: string;
     lastAgentMessage?: string;
   }): Promise<{ action: "focused" | "opened" | "failed" }> {
-    if (!isMacOS) return { action: "failed" };
+    if (!isTerminalEnabled()) return { action: "failed" };
 
     const { cwd, sessionId, lastAgentMessage } = options;
 
@@ -210,7 +278,7 @@ APPLESCRIPT`);
       }
     }
 
-    // Fallback: search for sessionId (visible in `claude --resume <id>` command)
+    // Fallback: search for sessionId
     if (await this.focusByContent(sessionId)) {
       return { action: "focused" };
     }
@@ -221,5 +289,5 @@ APPLESCRIPT`);
       command: `claude --resume ${sessionId}`,
     });
     return { action: opened ? "opened" : "failed" };
-  }
-}
+  },
+};

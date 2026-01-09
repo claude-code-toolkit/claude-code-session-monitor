@@ -28,7 +28,7 @@ import { StreamServer } from "./server.js";
 import { formatStatus } from "./status.js";
 import { checkGHAuth, isGHEnabled } from "./github.js";
 import { isNotificationsEnabled, notifyWaitingForInput, notifyNeedsApproval } from "./notify.js";
-import { ITerm } from "./iterm.js";
+import { Terminal, getTerminalType } from "./terminal.js";
 
 const PORT = parseInt(process.env.PORT ?? "4450", 10);
 const API_PORT = parseInt(process.env.API_PORT ?? "4451", 10);
@@ -66,8 +66,10 @@ async function main(): Promise<void> {
   const hasGHAuth = isGHEnabled();
 
   const hasNotifications = isNotificationsEnabled();
+  const terminalType = getTerminalType();
+  const hasTerminal = terminalType !== "none";
 
-  if (!hasAnthropicKey || !hasGHAuth || !hasNotifications) {
+  if (!hasAnthropicKey || !hasGHAuth || !hasNotifications || !hasTerminal) {
     console.log(`${colors.yellow}Optional integrations:${colors.reset}`);
     if (!hasAnthropicKey) {
       console.log(`  ${colors.dim}• ANTHROPIC_API_KEY not set - AI summaries disabled${colors.reset}`);
@@ -78,7 +80,14 @@ async function main(): Promise<void> {
     if (!hasNotifications) {
       console.log(`  ${colors.dim}• NOTIFICATIONS_ENABLED not set - desktop notifications disabled${colors.reset}`);
     }
+    if (!hasTerminal) {
+      console.log(`  ${colors.dim}• TERMINAL not set or unsupported - click-to-focus disabled${colors.reset}`);
+    }
     console.log();
+  }
+
+  if (hasTerminal) {
+    console.log(`${colors.dim}Terminal: ${terminalType}${colors.reset}`);
   }
 
   // Start the durable streams server
@@ -108,7 +117,7 @@ async function main(): Promise<void> {
           body += chunk;
         }
         const { searchTerm } = JSON.parse(body || "{}");
-        const success = await ITerm.focusByName(searchTerm);
+        const success = await Terminal.focusByName(searchTerm);
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ success }));
       } catch (error) {
@@ -130,7 +139,7 @@ async function main(): Promise<void> {
           res.end(JSON.stringify({ error: "cwd and sessionId required" }));
           return;
         }
-        const success = await ITerm.openTab({ cwd, command: `claude --resume ${sessionId}` });
+        const success = await Terminal.openTab({ cwd, command: `claude --resume ${sessionId}` });
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ success }));
       } catch (error) {
@@ -152,7 +161,7 @@ async function main(): Promise<void> {
           res.end(JSON.stringify({ error: "cwd and sessionId required" }));
           return;
         }
-        const result = await ITerm.focusOrOpen({ cwd, sessionId, lastAgentMessage });
+        const result = await Terminal.focusOrOpen({ cwd, sessionId, lastAgentMessage });
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(result));
       } catch (error) {

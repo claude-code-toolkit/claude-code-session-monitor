@@ -124,9 +124,20 @@ Get notified when Claude needs attention:
 - Click notification to focus the correct iTerm tab
 - Notifications for "Waiting for input" and "Needs approval" states
 
-## Click-to-Focus (macOS + iTerm2)
+## Click-to-Focus (Terminal Integration)
 
-Click any session card in the UI to focus or open the corresponding iTerm tab.
+Click any session card in the UI to focus or open the corresponding terminal tab.
+
+### Supported Terminals
+
+| Terminal | TERMINAL env | Status |
+|----------|--------------|--------|
+| iTerm2 | `iterm2` | Supported (default on macOS) |
+| Terminal.app | `terminal` | Planned |
+| Kitty | `kitty` | Planned |
+| Warp | `warp` | Planned |
+
+Set `TERMINAL=none` to disable terminal features.
 
 ### How Tab Matching Works
 
@@ -177,6 +188,9 @@ ANTHROPIC_API_KEY=sk-ant-...
 # Desktop notifications (optional, macOS only)
 NOTIFICATIONS_ENABLED=true
 
+# Terminal integration (optional, for click-to-focus)
+TERMINAL=iterm2  # or: none, terminal, kitty, warp
+
 # Daemon settings
 PORT=4450              # Stream server port
 MAX_AGE_HOURS=24       # Only show sessions from last N hours
@@ -189,6 +203,7 @@ MAX_AGE_HOURS=24       # Only show sessions from last N hours
 | AI Summaries | `ANTHROPIC_API_KEY` | Shows truncated original prompt |
 | PR/CI Tracking | `gh` CLI authenticated | Skipped silently |
 | Notifications | `NOTIFICATIONS_ENABLED=true` | None |
+| Click-to-Focus | `TERMINAL=iterm2` | Disabled (iTerm2 default on macOS) |
 
 ## Dependencies
 
