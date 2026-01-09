@@ -124,6 +124,32 @@ Get notified when Claude needs attention:
 - Click notification to focus the correct iTerm tab
 - Notifications for "Waiting for input" and "Needs approval" states
 
+## Click-to-Focus (macOS + iTerm2)
+
+Click any session card in the UI to focus or open the corresponding iTerm tab.
+
+### How Tab Matching Works
+
+1. **Text content search**: Searches all iTerm tabs for the last 40 characters of the session's last assistant message (normalized to alphanumeric + spaces)
+2. **Session ID fallback**: If text search fails, searches for the session ID (visible in `claude --resume <id>` command)
+3. **Open new tab**: If no matching tab found, opens a new iTerm tab with `cd <cwd> && claude --resume <sessionId>`
+
+### Why Text Matching?
+
+- **Multiple sessions per directory**: Can't match by working directory alone since you might have several sessions in the same project
+- **Resumed sessions lose ✳ prefix**: When Claude exits, the tab name changes from "✳ Task (node)" to just "node", so we can't filter by prefix
+- **Full scrollback search**: Uses iTerm's `contents` (full scrollback buffer, 64k+ chars) not just visible text
+
+### Normalization
+
+Both the search text and terminal contents are normalized for reliable matching:
+```
+"Hello, world! How are you?" → "hello world how are you"
+```
+- Alphanumeric characters and spaces only
+- Collapsed whitespace
+- Lowercase
+
 ## Development
 
 ```bash
