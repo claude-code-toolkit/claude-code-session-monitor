@@ -30,37 +30,79 @@ async function findGitDir(startPath: string): Promise<string | null> {
 
 /**
  * Parse a git remote URL and extract the repo identifier.
- * Handles both HTTPS and SSH formats:
+ * Handles GitHub and Azure DevOps in both HTTPS and SSH formats:
+ *
+ * GitHub:
  * - https://github.com/owner/repo.git
  * - git@github.com:owner/repo.git
- * - https://github.com/owner/repo
+ *
+ * Azure DevOps:
+ * - https://dev.azure.com/{org}/{project}/_git/{repo}
+ * - https://{org}.visualstudio.com/{project}/_git/{repo}
+ * - git@ssh.dev.azure.com:v3/{org}/{project}/{repo}
  */
 function parseGitUrl(url: string): { repoUrl: string; repoId: string } | null {
-  // HTTPS format: https://github.com/owner/repo.git
-  const httpsMatch = url.match(
+  // GitHub HTTPS format: https://github.com/owner/repo.git
+  const githubHttpsMatch = url.match(
     /^https?:\/\/(?:www\.)?github\.com\/([^/]+)\/([^/\s]+?)(?:\.git)?$/i
   );
-  if (httpsMatch) {
-    const [, owner, repo] = httpsMatch;
+  if (githubHttpsMatch) {
+    const [, owner, repo] = githubHttpsMatch;
     return {
       repoUrl: `https://github.com/${owner}/${repo}`,
       repoId: `${owner}/${repo}`,
     };
   }
 
-  // SSH format: git@github.com:owner/repo.git
-  const sshMatch = url.match(
+  // GitHub SSH format: git@github.com:owner/repo.git
+  const githubSshMatch = url.match(
     /^git@github\.com:([^/]+)\/([^/\s]+?)(?:\.git)?$/i
   );
-  if (sshMatch) {
-    const [, owner, repo] = sshMatch;
+  if (githubSshMatch) {
+    const [, owner, repo] = githubSshMatch;
     return {
       repoUrl: `https://github.com/${owner}/${repo}`,
       repoId: `${owner}/${repo}`,
     };
   }
 
-  // Not a GitHub URL
+  // Azure DevOps HTTPS format: https://dev.azure.com/{org}/{project}/_git/{repo}
+  const azureHttpsMatch = url.match(
+    /^https?:\/\/dev\.azure\.com\/([^/]+)\/([^/]+)\/_git\/([^/\s]+?)(?:\.git)?$/i
+  );
+  if (azureHttpsMatch) {
+    const [, org, project, repo] = azureHttpsMatch;
+    return {
+      repoUrl: `https://dev.azure.com/${org}/${project}/_git/${repo}`,
+      repoId: `${org}/${project}/${repo}`,
+    };
+  }
+
+  // Azure DevOps old HTTPS format: https://{org}.visualstudio.com/{project}/_git/{repo}
+  const azureVsMatch = url.match(
+    /^https?:\/\/([^.]+)\.visualstudio\.com\/([^/]+)\/_git\/([^/\s]+?)(?:\.git)?$/i
+  );
+  if (azureVsMatch) {
+    const [, org, project, repo] = azureVsMatch;
+    return {
+      repoUrl: `https://dev.azure.com/${org}/${project}/_git/${repo}`,
+      repoId: `${org}/${project}/${repo}`,
+    };
+  }
+
+  // Azure DevOps SSH format: git@ssh.dev.azure.com:v3/{org}/{project}/{repo}
+  const azureSshMatch = url.match(
+    /^git@ssh\.dev\.azure\.com:v3\/([^/]+)\/([^/]+)\/([^/\s]+?)(?:\.git)?$/i
+  );
+  if (azureSshMatch) {
+    const [, org, project, repo] = azureSshMatch;
+    return {
+      repoUrl: `https://dev.azure.com/${org}/${project}/_git/${repo}`,
+      repoId: `${org}/${project}/${repo}`,
+    };
+  }
+
+  // Not a recognized provider URL
   return null;
 }
 

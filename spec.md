@@ -637,9 +637,9 @@ interface SessionRef {
   originalPrompt: string;
   slug?: string;              // From assistant entry, for fun display
 
-  // GitHub repo info (for grouping)
-  gitRepoUrl: string | null;  // https://github.com/owner/repo
-  gitRepoId: string | null;   // owner/repo (used as grouping key)
+  // Git repo info (for grouping) - supports GitHub and Azure DevOps
+  gitRepoUrl: string | null;  // https://github.com/owner/repo or https://dev.azure.com/org/project/_git/repo
+  gitRepoId: string | null;   // owner/repo (GitHub) or org/project/repo (Azure DevOps)
 
   // Timestamps
   startedAt: string;

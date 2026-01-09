@@ -69,6 +69,7 @@
 			<RepoSection
 				repoId={group.repoId}
 				repoUrl={group.repoUrl}
+				isGitRepo={group.isGitRepo}
 				sessions={group.sessions}
 			/>
 		{/each}

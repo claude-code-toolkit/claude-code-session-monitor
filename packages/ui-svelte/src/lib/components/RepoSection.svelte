@@ -5,14 +5,15 @@
 
 	export let repoId: string;
 	export let repoUrl: string | null;
+	export let isGitRepo: boolean = true;
 	export let sessions: Session[];
 
 	$: isCollapsed = $collapsedSections.has(repoId);
 
-	// Auto-restore dismissed sessions that become active
+	// Auto-restore dismissed sessions that become active (working or needs approval)
 	$: {
 		sessions.forEach((s) => {
-			if (s.status !== 'idle' && $dismissedSessions.has(s.sessionId)) {
+			if ((s.status === 'working' || (s.status === 'waiting' && s.hasPendingToolUse)) && $dismissedSessions.has(s.sessionId)) {
 				dismissedSessions.restore(s.sessionId);
 			}
 		});
@@ -28,21 +29,23 @@
 
 	$: working = filteredSessions.filter((s) => s.status === 'working');
 	$: needsApproval = filteredSessions.filter((s) => s.status === 'waiting' && s.hasPendingToolUse);
-	$: waiting = filteredSessions.filter((s) => s.status === 'waiting' && !s.hasPendingToolUse);
-	// Filter out dismissed sessions from idle
+	// Filter out dismissed sessions from waiting and idle
+	$: waiting = filteredSessions.filter((s) => s.status === 'waiting' && !s.hasPendingToolUse && !$dismissedSessions.has(s.sessionId));
 	$: idle = filteredSessions.filter((s) => s.status === 'idle' && !$dismissedSessions.has(s.sessionId));
 
 	$: totalVisible = working.length + needsApproval.length + waiting.length + idle.length;
 
-	// Extract repo name from ID for cleaner display
-	$: displayName = repoId === 'Other' ? 'other' : repoId.split('/').pop() || repoId;
-	$: orgName = repoId === 'Other' ? null : repoId.includes('/') ? repoId.split('/')[0] : null;
+	// Extract display name based on whether it's a git repo or path
+	$: displayName = isGitRepo ? (repoId.split('/').pop() || repoId) : repoId;
+	$: orgName = isGitRepo && repoId.includes('/') ? repoId.split('/')[0] : null;
 
 	function toggleCollapsed() {
 		collapsedSections.toggle(repoId);
 	}
 </script>
 
+<!-- Don't render if no visible sessions -->
+{#if totalVisible > 0}
 <section class="group">
 	<!-- Repository header -->
 	<button
@@ -54,9 +57,8 @@
 			{isCollapsed ? '▸' : '▾'}
 		</span>
 
-		{#if repoId === 'Other'}
-			<h2 class="text-sm font-mono text-carbon-9">~/other</h2>
-		{:else}
+		{#if isGitRepo}
+			<!-- Git repo: show org/repo format -->
 			<span class="text-sm font-mono text-carbon-8">
 				{#if orgName}{orgName}/{/if}
 			</span>
@@ -65,6 +67,9 @@
 			{:else}
 				<h2 class="text-sm font-medium text-carbon-12">{displayName}</h2>
 			{/if}
+		{:else}
+			<!-- Path-based group: show path -->
+			<h2 class="text-sm font-mono text-carbon-10">{displayName}</h2>
 		{/if}
 
 		<!-- Inline activity stats -->
@@ -91,3 +96,4 @@
 		</div>
 	{/if}
 </section>
+{/if}

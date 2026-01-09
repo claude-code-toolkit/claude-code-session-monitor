@@ -62,8 +62,8 @@
 	<!-- Subtle noise texture overlay -->
 	<div class="absolute inset-0 opacity-[0.015] bg-noise pointer-events-none"></div>
 
-	<!-- Dismiss button (idle only) -->
-	{#if status === 'idle'}
+	<!-- Dismiss button (idle and waiting) -->
+	{#if status === 'idle' || status === 'waiting'}
 		<button
 			class="absolute top-1.5 right-1.5 w-5 h-5 rounded flex items-center justify-center
 				text-carbon-8 hover:text-carbon-11 hover:bg-carbon-5

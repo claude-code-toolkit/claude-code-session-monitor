@@ -34,28 +34,73 @@ function calculateRepoActivityScore(sessions: Session[]): number {
 export interface RepoGroup {
 	repoId: string;
 	repoUrl: string | null;
+	isGitRepo: boolean;
 	sessions: Session[];
 	activityScore: number;
 }
 
 /**
- * Group sessions by repo, sorted by activity score
+ * Get a display-friendly group key from a path.
+ * E.g., "/Users/john/Projects/myapp" -> "~/Projects/myapp"
  */
-export function groupSessionsByRepo(sessions: Session[]): RepoGroup[] {
-	const groups = new Map<string, Session[]>();
+function getPathGroupKey(cwd: string): string {
+	let path = cwd;
 
-	for (const session of sessions) {
-		const key = session.gitRepoId ?? 'Other';
-		const existing = groups.get(key) ?? [];
-		existing.push(session);
-		groups.set(key, existing);
+	// Try common home patterns
+	const homeMatch = cwd.match(/^\/Users\/[^/]+/);
+	if (homeMatch) {
+		path = '~' + cwd.slice(homeMatch[0].length);
+	} else if (cwd.startsWith('/home/')) {
+		const parts = cwd.split('/');
+		path = '~/' + parts.slice(3).join('/');
 	}
 
-	const groupsWithScores = Array.from(groups.entries()).map(([key, sessions]) => ({
+	return path || cwd;
+}
+
+/**
+ * Group sessions by repo, sorted by activity score.
+ * Git repos grouped by gitRepoId, non-git sessions grouped by cwd path.
+ */
+export function groupSessionsByRepo(sessions: Session[]): RepoGroup[] {
+	const groups = new Map<string, { sessions: Session[]; isGitRepo: boolean; repoUrl: string | null }>();
+
+	for (const session of sessions) {
+		if (session.gitRepoId) {
+			// Git repo - group by repo ID
+			const key = session.gitRepoId;
+			const existing = groups.get(key);
+			if (existing) {
+				existing.sessions.push(session);
+			} else {
+				groups.set(key, {
+					sessions: [session],
+					isGitRepo: true,
+					repoUrl: `https://github.com/${key}`
+				});
+			}
+		} else {
+			// Non-git - group by cwd path
+			const key = getPathGroupKey(session.cwd);
+			const existing = groups.get(key);
+			if (existing) {
+				existing.sessions.push(session);
+			} else {
+				groups.set(key, {
+					sessions: [session],
+					isGitRepo: false,
+					repoUrl: null
+				});
+			}
+		}
+	}
+
+	const groupsWithScores = Array.from(groups.entries()).map(([key, data]) => ({
 		repoId: key,
-		repoUrl: key === 'Other' ? null : `https://github.com/${key}`,
-		sessions,
-		activityScore: calculateRepoActivityScore(sessions)
+		repoUrl: data.repoUrl,
+		isGitRepo: data.isGitRepo,
+		sessions: data.sessions,
+		activityScore: calculateRepoActivityScore(data.sessions)
 	}));
 
 	groupsWithScores.sort((a, b) => b.activityScore - a.activityScore);
