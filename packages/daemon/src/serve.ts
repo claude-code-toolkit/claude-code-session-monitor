@@ -67,7 +67,7 @@ async function main(): Promise<void> {
 
   const hasNotifications = isNotificationsEnabled();
   const terminalType = getTerminalType();
-  const hasTerminal = terminalType !== "none";
+  const hasTerminal = terminalType !== "NONE";
 
   if (!hasAnthropicKey || !hasGHAuth || !hasNotifications || !hasTerminal) {
     console.log(`${colors.yellow}Optional integrations:${colors.reset}`);

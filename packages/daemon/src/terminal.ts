@@ -2,11 +2,9 @@
  * Terminal abstraction for tab management and focusing.
  * Supports different terminal emulators via TERMINAL env var.
  *
- * Supported terminals:
- * - iterm2 (default on macOS)
- * - none (disable terminal features)
- *
- * Future: terminal, kitty, warp, alacritty
+ * Supported values:
+ * - ITERM2 (default on macOS)
+ * - NONE (disable terminal features)
  */
 
 import { exec } from "node:child_process";
@@ -16,37 +14,37 @@ import { platform } from "node:os";
 const execAsync = promisify(exec);
 const isMacOS = platform() === "darwin";
 
-export type TerminalType = "iterm2" | "none";
+export type TerminalType = "ITERM2" | "NONE";
 
 /**
- * Get configured terminal type from env var
+ * Get configured terminal type from env var (case-insensitive)
  */
 export function getTerminalType(): TerminalType {
-  const terminal = process.env.TERMINAL?.toLowerCase();
+  const terminal = process.env.TERMINAL?.toUpperCase();
 
-  if (terminal === "none" || terminal === "disabled") {
-    return "none";
+  if (terminal === "NONE" || terminal === "DISABLED") {
+    return "NONE";
   }
 
-  if (terminal === "iterm2" || terminal === "iterm") {
-    return "iterm2";
+  if (terminal === "ITERM2" || terminal === "ITERM") {
+    return "ITERM2";
   }
 
-  // Default: iterm2 on macOS, none otherwise
+  // Default: ITERM2 on macOS, NONE otherwise
   if (!terminal) {
-    return isMacOS ? "iterm2" : "none";
+    return isMacOS ? "ITERM2" : "NONE";
   }
 
   // Unknown terminal - warn and disable
-  console.warn(`Unknown TERMINAL="${terminal}", disabling terminal features. Supported: iterm2, none`);
-  return "none";
+  console.warn(`Unknown TERMINAL="${process.env.TERMINAL}", disabling terminal features. Supported: ITERM2, NONE`);
+  return "NONE";
 }
 
 /**
  * Check if terminal features are enabled
  */
 export function isTerminalEnabled(): boolean {
-  return getTerminalType() !== "none";
+  return getTerminalType() !== "NONE";
 }
 
 /**
@@ -219,7 +217,7 @@ export const Terminal = {
    */
   async getAllSessions(): Promise<{ name: string; cwd: string }[]> {
     const type = getTerminalType();
-    if (type === "iterm2") return iterm2.getAllSessions();
+    if (type === "ITERM2") return iterm2.getAllSessions();
     return [];
   },
 
@@ -228,7 +226,7 @@ export const Terminal = {
    */
   async getCurrentClaudeSessionName(): Promise<string | null> {
     const type = getTerminalType();
-    if (type === "iterm2") return iterm2.getCurrentClaudeSessionName();
+    if (type === "ITERM2") return iterm2.getCurrentClaudeSessionName();
     return null;
   },
 
@@ -237,7 +235,7 @@ export const Terminal = {
    */
   async focusByName(searchTerm?: string): Promise<boolean> {
     const type = getTerminalType();
-    if (type === "iterm2") return iterm2.focusByName(searchTerm);
+    if (type === "ITERM2") return iterm2.focusByName(searchTerm);
     return false;
   },
 
@@ -246,7 +244,7 @@ export const Terminal = {
    */
   async focusByContent(searchText: string): Promise<boolean> {
     const type = getTerminalType();
-    if (type === "iterm2") return iterm2.focusByContent(searchText);
+    if (type === "ITERM2") return iterm2.focusByContent(searchText);
     return false;
   },
 
@@ -255,7 +253,7 @@ export const Terminal = {
    */
   async openTab(options: { cwd: string; command: string }): Promise<boolean> {
     const type = getTerminalType();
-    if (type === "iterm2") return iterm2.openTab(options);
+    if (type === "ITERM2") return iterm2.openTab(options);
     return false;
   },
 

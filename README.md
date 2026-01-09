@@ -130,10 +130,10 @@ Click any session card in the UI to focus or open the corresponding terminal tab
 
 ### Supported Terminals
 
-- `iterm2` - iTerm2
-- `none` - Disable terminal features
+- `ITERM2` - iTerm2
+- `NONE` - Disable terminal features
 
-Set via `TERMINAL` env var. Defaults to `iterm2` on macOS, `none` otherwise.
+Set via `TERMINAL` env var. Defaults to `ITERM2` on macOS, `NONE` otherwise.
 
 ### How Tab Matching Works
 
@@ -185,7 +185,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 NOTIFICATIONS_ENABLED=true
 
 # Terminal integration (optional, for click-to-focus)
-TERMINAL=iterm2  # or: none
+TERMINAL=ITERM2  # or: NONE
 
 # Daemon settings
 PORT=4450              # Stream server port
@@ -199,7 +199,7 @@ MAX_AGE_HOURS=24       # Only show sessions from last N hours
 | AI Summaries | `ANTHROPIC_API_KEY` | Shows truncated original prompt |
 | PR/CI Tracking | `gh` CLI authenticated | Skipped silently |
 | Notifications | `NOTIFICATIONS_ENABLED=true` | None |
-| Click-to-Focus | `TERMINAL=iterm2` | Disabled (iTerm2 default on macOS) |
+| Click-to-Focus | `TERMINAL=ITERM2` | Disabled (defaults to ITERM2 on macOS) |
 
 ## Dependencies
 
