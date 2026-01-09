@@ -185,14 +185,13 @@ NOTIFICATIONS_ENABLED=true
 # Terminal integration (optional, for click-to-focus)
 TERMINAL=ITERM2  # or: NONE
 
-# Daemon settings
-PORT=4450              # Stream server port
-API_PORT=4451          # API server port (for click-to-focus)
-MAX_AGE_HOURS=24       # Only show sessions from last N hours
+# Server ports
+PORT=4450              # Daemon stream server port
+API_PORT=4451          # Daemon API server port (for click-to-focus)
+UI_PORT=5173           # UI dev server port
 
-# UI settings (for build-time configuration)
-VITE_STREAM_PORT=4450  # Must match daemon PORT
-VITE_API_PORT=4451     # Must match daemon API_PORT
+# Daemon settings
+MAX_AGE_HOURS=24       # Only show sessions from last N hours
 ```
 
 ### Optional Integrations
