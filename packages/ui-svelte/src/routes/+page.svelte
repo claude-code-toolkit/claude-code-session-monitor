@@ -70,7 +70,6 @@
 				repoId={group.repoId}
 				repoUrl={group.repoUrl}
 				sessions={group.sessions}
-				activityScore={group.activityScore}
 			/>
 		{/each}
 	</div>
