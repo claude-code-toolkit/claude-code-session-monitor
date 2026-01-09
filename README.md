@@ -1,159 +1,119 @@
-# Claude Code Session Tracker
+# Claude Code Session Monitor
 
-A real-time dashboard for monitoring Claude Code sessions across multiple projects. See what Claude is working on, which sessions need approval, and track PR/CI status.
+A real-time dashboard for monitoring and interacting with Claude Code sessions. View all your sessions, see what Claude is working on, and open integrated terminals—all from one place.
+
+![Dashboard Screenshot](docs/screenshot.png)
 
 ## Features
 
-- **Real-time updates** via Durable Streams
-- **Kanban board** showing sessions by status (Working, Needs Approval, Waiting, Idle)
-- **AI-powered summaries** of session activity using Claude Sonnet
-- **PR & CI tracking** - see associated PRs and their CI status
-- **Multi-repo support** - sessions grouped by GitHub repository
+- **Real-time session monitoring** - See all active Claude sessions across projects
+- **Integrated terminal panel** - Click any session to open a terminal, powered by tmux
+- **New session launcher** - Create new Claude sessions in any directory via nnn file picker
+- **Status tracking** - Working, Waiting, Needs Approval, Idle states
+- **PR/CI integration** - See associated PRs and their CI status
+- **Desktop notifications** - Get notified when Claude needs attention (macOS)
 
-## Architecture
+## Quick Start
+
+```bash
+# Install dependencies
+./scripts/install.sh
+
+# Start the monitor
+./scripts/start.sh
+```
+
+Then open http://localhost:5173
+
+## Requirements
+
+- **Node.js** >= 18
+- **pnpm** - Package manager
+- **tmux** - Terminal multiplexer (for integrated terminals)
+- **nnn** - File manager (for new session launcher)
+
+### macOS
+
+```bash
+brew install tmux nnn pnpm
+```
+
+## How It Works
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
 │  Claude Code    │     │     Daemon      │     │       UI        │
-│   Sessions      │────▶│   (Watcher)     │────▶│   (SvelteKit)   │
-│  ~/.claude/     │     │                 │     │                 │
-│   projects/     │     │  Durable Stream │     │  Durable Stream │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
+│   ~/.claude/    │────▶│   (Watcher +    │────▶│   (SvelteKit)   │
+│   projects/     │     │    PTY Mgr)     │     │                 │
+└─────────────────┘     └────────┬────────┘     └────────┬────────┘
+                                 │                       │
+                                 │◄──────────────────────┘
+                                 │     WebSocket (PTY I/O)
+                                 ▼
+                        ┌─────────────────┐
+                        │      tmux       │
+                        │   (sessions)    │
+                        └─────────────────┘
 ```
 
-### Daemon (`packages/daemon`)
+1. **Daemon** watches `~/.claude/projects/` for session logs
+2. **UI** displays sessions grouped by repo with real-time updates
+3. **Click a session** → Opens terminal panel attached to that tmux session
+4. **New Terminal** → Launches nnn to pick directory, starts fresh Claude session
 
-Watches `~/.claude/projects/` for session log changes and:
-- Parses JSONL log files incrementally
-- Derives session status using XState state machine
-- Generates AI summaries via Claude Sonnet API
-- Detects git branches and polls for PR/CI status
-- Publishes state updates to Durable Streams
+## Usage
 
-### UI (`packages/ui-svelte`)
+### Opening Terminals
 
-SvelteKit app with Tailwind CSS:
-- Subscribes to Durable Streams for real-time updates
-- Groups sessions by GitHub repository
-- Shows session cards with goal, summary, branch/PR info
-- Hover cards with recent output preview
+Click any session card in the dashboard to open a terminal for that session. The terminal connects to a tmux session running Claude.
 
-## Session Status State Machine
+- Sessions persist even if you close the browser
+- Reconnect to any session by clicking it again
+- Multiple terminals can be open simultaneously (tabs)
 
-The daemon uses an XState state machine to determine session status:
+### Creating New Sessions
 
+1. Click the **+** button in the terminal panel (or floating button)
+2. Navigate to your project directory using nnn
+3. Press **Ctrl+G** to select the directory
+4. Claude starts in a fresh session
+
+### Session States
+
+| State | Description |
+|-------|-------------|
+| **Working** | Claude is actively processing |
+| **Needs Approval** | Tool use awaiting user approval |
+| **Waiting** | Claude finished, waiting for user input |
+| **Idle** | No activity for 20+ minutes |
+
+## Configuration
+
+Create a `.env` file in the project root:
+
+```bash
+# AI-powered summaries (optional)
+ANTHROPIC_API_KEY=sk-ant-...
+
+# Desktop notifications (optional, macOS)
+NOTIFICATIONS_ENABLED=true
+
+# Server ports (defaults shown)
+PORT=4450              # Daemon stream server
+API_PORT=4451          # Daemon API + WebSocket
+UI_PORT=5173           # UI dev server
+
+# Session filtering
+MAX_AGE_HOURS=24       # Only show sessions from last N hours
 ```
-                    ┌─────────────────┐
-                    │      idle       │
-                    └────────┬────────┘
-                             │ USER_PROMPT
-                             ▼
-┌─────────────────┐  TOOL_RESULT  ┌─────────────────┐
-│ waiting_for_    │◄──────────────│     working     │
-│   approval      │               └────────┬────────┘
-└────────┬────────┘                        │
-         │                    ┌────────────┼────────────┐
-         │                    │            │            │
-         │              TURN_END    ASSISTANT_   STALE_
-         │                    │      TOOL_USE   TIMEOUT
-         │                    ▼            │            │
-         │            ┌─────────────────┐  │            │
-         │            │ waiting_for_   │◄─┘            │
-         └───────────▶│     input      │◄──────────────┘
-           IDLE_      └─────────────────┘
-          TIMEOUT
-```
 
-### States
+### Optional Features
 
-| State | Description | UI Column |
-|-------|-------------|-----------|
-| `idle` | No activity for 20+ minutes | Idle |
-| `working` | Claude is actively processing | Working |
-| `waiting_for_approval` | Tool use needs user approval | Needs Approval |
-| `waiting_for_input` | Claude finished, waiting for user | Waiting |
-
-### Events (from log entries)
-
-| Event | Source | Description |
-|-------|--------|-------------|
-| `USER_PROMPT` | User entry with string content | User sent a message |
-| `TOOL_RESULT` | User entry with tool_result array | User approved/ran tool |
-| `ASSISTANT_STREAMING` | Assistant entry (no tool_use) | Claude is outputting |
-| `ASSISTANT_TOOL_USE` | Assistant entry with tool_use | Claude requested a tool |
-| `TURN_END` | System entry (turn_duration/stop_hook_summary) | Turn completed |
-
-### Timeout Fallbacks
-
-Claude Code inconsistently writes `turn_duration` markers, so we use timeout fallbacks:
-- **500ms**: Text response without turn marker → `waiting_for_input` (fast detection)
-- **5 seconds**: Tool use pending too long → `waiting_for_approval`
-- **20 minutes**: No activity → `idle`
-
-The daemon rechecks sessions every 2 seconds to catch stale states even without file changes.
-
-## Desktop Notifications (macOS)
-
-Get notified when Claude needs attention:
-
-1. **Enable notifications** in `.env`:
-   ```bash
-   NOTIFICATIONS_ENABLED=true
-   ```
-
-2. **Silence Claude Code's built-in notifications** (optional, to avoid duplicates):
-   ```bash
-   ./scripts/silence-claude-notifications.sh
-   ```
-   Or manually add to `~/.claude/settings.json`:
-   ```json
-   {
-     "preferredNotifChannel": "terminal_bell"
-   }
-   ```
-
-3. **Install terminal-notifier** (for better notifications):
-   ```bash
-   brew install terminal-notifier
-   ```
-
-### Features
-- Shows current iTerm tab name (e.g., "✳ Feature Implementation (node)")
-- Click notification to focus the correct iTerm tab
-- Notifications for "Waiting for input" and "Needs approval" states
-
-## Click-to-Focus (Terminal Integration)
-
-Click any session card in the UI to focus or open the corresponding terminal tab.
-
-### Supported Terminals
-
-- `ITERM2` - iTerm2
-- `NONE` - Disable terminal features
-
-Set via `TERMINAL` env var. Defaults to `ITERM2` on macOS, `NONE` otherwise.
-
-### How Tab Matching Works
-
-1. **Text content search**: Searches all iTerm tabs for the last 40 characters of the session's last assistant message (normalized to alphanumeric + spaces)
-2. **Session ID fallback**: If text search fails, searches for the session ID (visible in `claude --resume <id>` command)
-3. **Open new tab**: If no matching tab found, opens a new iTerm tab with `cd <cwd> && claude --resume <sessionId>`
-
-### Why Text Matching?
-
-- **Multiple sessions per directory**: Can't match by working directory alone since you might have several sessions in the same project
-- **Resumed sessions lose ✳ prefix**: When Claude exits, the tab name changes from "✳ Task (node)" to just "node", so we can't filter by prefix
-- **Full scrollback search**: Uses iTerm's `contents` (full scrollback buffer, 64k+ chars) not just visible text
-
-### Normalization
-
-Both the search text and terminal contents are normalized for reliable matching:
-```
-"Hello, world! How are you?" → "hello world how are you"
-```
-- Alphanumeric characters and spaces only
-- Collapsed whitespace
-- Lowercase
+| Feature | Requirement | Without It |
+|---------|-------------|------------|
+| AI Summaries | `ANTHROPIC_API_KEY` | Shows truncated prompt |
+| PR/CI Status | `gh` CLI authenticated | PR info hidden |
+| Notifications | `NOTIFICATIONS_ENABLED=true` | No desktop alerts |
 
 ## Development
 
@@ -161,52 +121,57 @@ Both the search text and terminal contents are normalized for reliable matching:
 # Install dependencies
 pnpm install
 
-# Start both daemon and UI
+# Start daemon only
+pnpm serve
+
+# Start UI dev server (separate terminal)
+pnpm --filter ui-svelte dev
+
+# Or start both
 pnpm start
-
-# Or run separately:
-pnpm serve  # Start daemon on port 4450
-pnpm dev    # Start UI dev server
 ```
 
-## Environment Variables
+### Project Structure
 
-All integrations are optional - the daemon works without any of these:
-
-```bash
-# .env file in project root
-
-# AI-powered summaries (optional)
-ANTHROPIC_API_KEY=sk-ant-...
-
-# Desktop notifications (optional, macOS only)
-NOTIFICATIONS_ENABLED=true
-
-# Terminal integration (optional, for click-to-focus)
-TERMINAL=ITERM2  # or: NONE
-
-# Server ports
-PORT=4450              # Daemon stream server port
-API_PORT=4451          # Daemon API server port (for click-to-focus)
-UI_PORT=5173           # UI dev server port
-
-# Daemon settings
-MAX_AGE_HOURS=24       # Only show sessions from last N hours
+```
+packages/
+├── daemon/           # Session watcher + PTY manager
+│   ├── src/
+│   │   ├── serve.ts       # Main entry point
+│   │   ├── watcher.ts     # JSONL file watcher
+│   │   ├── pty.ts         # PTY/terminal management
+│   │   ├── tmux.ts        # tmux session utilities
+│   │   └── terminal-ws.ts # WebSocket server for terminals
+│   └── ...
+└── ui-svelte/        # SvelteKit dashboard
+    ├── src/
+    │   ├── lib/
+    │   │   ├── components/
+    │   │   │   ├── Terminal.svelte
+    │   │   │   └── TerminalPanel.svelte
+    │   │   └── stores/
+    │   │       └── terminals.ts
+    │   └── routes/
+    └── ...
 ```
 
-### Optional Integrations
+## Troubleshooting
 
-| Feature | Requirement | Fallback |
-|---------|-------------|----------|
-| AI Summaries | `ANTHROPIC_API_KEY` | Shows truncated original prompt |
-| PR/CI Tracking | `gh` CLI authenticated | Skipped silently |
-| Notifications | `NOTIFICATIONS_ENABLED=true` | None |
-| Click-to-Focus | `TERMINAL=ITERM2` | Disabled (defaults to ITERM2 on macOS) |
+### Terminal shows escape sequences like `[?1;2c`
 
-## Dependencies
+Refresh the browser - this is filtered in the latest version.
 
-- **@durable-streams/*** - Real-time state synchronization
-- **xstate** - State machine for status detection
-- **chokidar** - File system watching
-- **SvelteKit** - UI framework
-- **Tailwind CSS** - Styling
+### Sessions not appearing
+
+- Check that Claude Code is running and creating logs in `~/.claude/projects/`
+- Restart the daemon: `pnpm serve`
+
+### tmux session conflicts
+
+Kill orphan sessions: `tmux kill-server` (warning: kills ALL tmux sessions)
+
+Or selectively: `tmux list-sessions` then `tmux kill-session -t <name>`
+
+## License
+
+MIT
