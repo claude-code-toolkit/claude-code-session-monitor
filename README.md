@@ -187,7 +187,12 @@ TERMINAL=ITERM2  # or: NONE
 
 # Daemon settings
 PORT=4450              # Stream server port
+API_PORT=4451          # API server port (for click-to-focus)
 MAX_AGE_HOURS=24       # Only show sessions from last N hours
+
+# UI settings (for build-time configuration)
+VITE_STREAM_PORT=4450  # Must match daemon PORT
+VITE_API_PORT=4451     # Must match daemon API_PORT
 ```
 
 ### Optional Integrations
@@ -205,4 +210,5 @@ MAX_AGE_HOURS=24       # Only show sessions from last N hours
 - **@tanstack/db** - Reactive database for UI
 - **xstate** - State machine for status detection
 - **chokidar** - File system watching
-- **@radix-ui/themes** - UI components
+- **SvelteKit** - UI framework
+- **Tailwind CSS** - Styling

@@ -1,6 +1,7 @@
 import type { Session } from '$lib/data/schema';
 
-const API_BASE = 'http://127.0.0.1:4451';
+const API_PORT = import.meta.env.VITE_API_PORT || '4451';
+const API_BASE = `http://127.0.0.1:${API_PORT}`;
 
 export function getLastAgentMessage(session: Session): string | undefined {
 	// Find the last assistant message from recentOutput
