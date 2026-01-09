@@ -18,7 +18,8 @@
   },
   "packageManager": "pnpm@10.26.0",
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "dotenv": "^17.2.3"
   },
   "dependencies": {
     "fastq": "^1.20.1"

@@ -9,9 +9,15 @@
 		getRoleColor,
 		toolIcons
 	} from '$lib/utils/formatters';
+	import { dismissedSessions } from '$lib/stores/dismissed';
 
 	export let session: Session;
 	export let status: 'working' | 'pending' | 'waiting' | 'idle' = 'idle';
+
+	function handleDismiss(event: MouseEvent) {
+		event.stopPropagation();
+		dismissedSessions.dismiss(session.sessionId);
+	}
 
 	$: showPendingTool = session.hasPendingToolUse && session.pendingTool;
 	$: dirPath = formatDirPath(session.cwd);
@@ -55,6 +61,19 @@
 >
 	<!-- Subtle noise texture overlay -->
 	<div class="absolute inset-0 opacity-[0.015] bg-noise pointer-events-none"></div>
+
+	<!-- Dismiss button (idle only) -->
+	{#if status === 'idle'}
+		<button
+			class="absolute top-1.5 right-1.5 w-5 h-5 rounded flex items-center justify-center
+				text-carbon-8 hover:text-carbon-11 hover:bg-carbon-5
+				opacity-0 group-hover:opacity-100 transition-opacity z-10"
+			on:click={handleDismiss}
+			title="Dismiss session"
+		>
+			<span class="text-xs">✕</span>
+		</button>
+	{/if}
 
 	<div class="relative px-3 py-2.5 h-full flex flex-col overflow-hidden">
 		<!-- Status badge - terminal style -->

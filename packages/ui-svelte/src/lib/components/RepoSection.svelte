@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Session } from '$lib/data/schema';
 	import KanbanColumn from './KanbanColumn.svelte';
+	import { dismissedSessions } from '$lib/stores/dismissed';
 
 	export let repoId: string;
 	export let repoUrl: string | null;
@@ -8,10 +9,20 @@
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	export let activityScore: number;
 
+	// Auto-restore dismissed sessions that become active
+	$: {
+		sessions.forEach((s) => {
+			if (s.status !== 'idle' && $dismissedSessions.has(s.sessionId)) {
+				dismissedSessions.restore(s.sessionId);
+			}
+		});
+	}
+
 	$: working = sessions.filter((s) => s.status === 'working');
 	$: needsApproval = sessions.filter((s) => s.status === 'waiting' && s.hasPendingToolUse);
 	$: waiting = sessions.filter((s) => s.status === 'waiting' && !s.hasPendingToolUse);
-	$: idle = sessions.filter((s) => s.status === 'idle');
+	// Filter out dismissed sessions from idle
+	$: idle = sessions.filter((s) => s.status === 'idle' && !$dismissedSessions.has(s.sessionId));
 
 	// Extract repo name from ID for cleaner display
 	$: displayName = repoId === 'Other' ? 'other' : repoId.split('/').pop() || repoId;
