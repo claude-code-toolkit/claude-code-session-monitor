@@ -130,14 +130,10 @@ Click any session card in the UI to focus or open the corresponding terminal tab
 
 ### Supported Terminals
 
-| Terminal | TERMINAL env | Status |
-|----------|--------------|--------|
-| iTerm2 | `iterm2` | Supported (default on macOS) |
-| Terminal.app | `terminal` | Planned |
-| Kitty | `kitty` | Planned |
-| Warp | `warp` | Planned |
+- `iterm2` - iTerm2 (default on macOS)
+- `none` - Disable terminal features
 
-Set `TERMINAL=none` to disable terminal features.
+Set via `TERMINAL` env var.
 
 ### How Tab Matching Works
 
@@ -189,7 +185,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 NOTIFICATIONS_ENABLED=true
 
 # Terminal integration (optional, for click-to-focus)
-TERMINAL=iterm2  # or: none, terminal, kitty, warp
+TERMINAL=iterm2  # or: none
 
 # Daemon settings
 PORT=4450              # Stream server port
