@@ -24,6 +24,7 @@
 	const machines = getMachinesStore();
 	let showSettings = false;
 	let showNotifySettings = false;
+	let showHelp = false;
 	let notificationPermission: NotificationPermission = 'default';
 
 	// Notification preferences (stored in localStorage)
@@ -79,6 +80,9 @@
 		if (!target.closest('.notify-dropdown')) {
 			showNotifySettings = false;
 		}
+		if (!target.closest('.help-dropdown')) {
+			showHelp = false;
+		}
 	}
 </script>
 
@@ -126,6 +130,50 @@
 
 			<!-- Right: controls -->
 			<div class="flex items-center gap-1">
+				<!-- Help dropdown -->
+			<div class="help-dropdown relative">
+				<button
+					class="flex items-center justify-center w-7 h-7 text-xs font-mono text-carbon-8 hover:text-carbon-11
+						hover:bg-carbon-4 rounded transition-colors"
+					on:click|stopPropagation={() => showHelp = !showHelp}
+					title="Help"
+				>
+					?
+				</button>
+
+				{#if showHelp}
+					<div class="absolute right-0 top-full mt-1 w-72 bg-carbon-2 border border-carbon-6/60
+						rounded-lg shadow-lg overflow-hidden animate-fade-in z-50">
+						<div class="px-3 py-2 border-b border-carbon-6/40">
+							<p class="text-2xs font-mono text-carbon-8 uppercase tracking-wide">Quick Guide</p>
+						</div>
+						<div class="px-3 py-3 space-y-3 text-xs text-carbon-11">
+							<div>
+								<p class="font-medium text-carbon-12 mb-1">Opening Terminals</p>
+								<p class="text-carbon-9">Click any session card to open a terminal attached to that Claude session.</p>
+							</div>
+							<div>
+								<p class="font-medium text-carbon-12 mb-1">New Session</p>
+								<p class="text-carbon-9">Click the <span class="text-accent-9">+</span> button to start a new Claude session. Use <kbd class="px-1 py-0.5 bg-carbon-4 rounded text-2xs">nnn</kbd> to navigate, then press <kbd class="px-1 py-0.5 bg-carbon-4 rounded text-2xs">Ctrl+G</kbd> to select a directory.</p>
+							</div>
+							<div>
+								<p class="font-medium text-carbon-12 mb-1">Session States</p>
+								<ul class="text-carbon-9 space-y-1 ml-2">
+									<li><span class="text-active-9">●</span> Working — Claude is processing</li>
+									<li><span class="text-pending-9">●</span> Needs Approval — Awaiting user</li>
+									<li><span class="text-carbon-9">●</span> Waiting — Ready for input</li>
+									<li><span class="text-carbon-7">●</span> Idle — No recent activity</li>
+								</ul>
+							</div>
+							<div>
+								<p class="font-medium text-carbon-12 mb-1">Notifications</p>
+								<p class="text-carbon-9">Click the bell icon to enable desktop notifications. Choose to be notified on all status changes, only when approval is needed, or disable entirely.</p>
+							</div>
+						</div>
+					</div>
+				{/if}
+			</div>
+
 				<!-- Notification settings -->
 			<div class="notify-dropdown relative">
 				<button

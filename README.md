@@ -78,6 +78,14 @@ Click any session card in the dashboard to open a terminal for that session. The
 3. Press **Ctrl+G** to select the directory
 4. Claude starts in a fresh session
 
+### Header Controls
+
+| Icon | Function |
+|------|----------|
+| **?** | Quick help guide with usage tips |
+| **Bell** | Notification settings — all changes, approval only, or disabled |
+| **≡ Xh** | Filter sessions by age (6h, 12h, 24h, 48h, 7 days, or all) |
+
 ### Session States
 
 | State | Description |
